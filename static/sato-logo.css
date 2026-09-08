@@ -1,4 +1,4 @@
-/* Sato Agents ‍ Hand-drawn stickman logo
+/* Sato Agents - Hand-drawn stickman logo
    Half-human, half-robot head split horizontally, with a laser beam.
    Drawn with rough strokes and imperfect lines for a sketch feel. */
 .brand-logo { width: 48px; height: 48px; flex-shrink: 0; overflow: visible; }
@@ -11,6 +11,6 @@
              stroke-linecap: round; stroke-linejoin: round; }
 .sk-robot  { stroke: var(--accent); }
 .sk-laser  { stroke: var(--yellow); }
-.*** { fill: var(--yellow); }
-.*** { fill: var(--accent); }
+.sk-fill-laser { fill: var(--yellow); }
+.sk-fill-robot { fill: var(--accent); }
 .sk-fill-text   { fill: currentColor; }

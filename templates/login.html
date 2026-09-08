@@ -1,5 +1,8 @@
 <!DOCTYPE html>
-<html><head><title>Hermes Login</title>
+<html lang="pt-br"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hermes Login</title>
 <style>
 body { font-family: sans-serif; background: #0d1117; color: #c9d1d9;
        display: flex; align-items: center; justify-content: center; height: 100vh; }
@@ -15,7 +18,7 @@ button { padding: 0.75rem 2rem; background: #1f6feb; color: white;
 <div class="box">
   <h2>🔐 Hermes Dashboard</h2>
   <p>Enter access token</p>
-  <form method="get">
+  <form method="get" action="/dashboard">
     <input name="token" placeholder="hermes-2026" autofocus />
     <button type="submit">Enter</button>
   </form>
