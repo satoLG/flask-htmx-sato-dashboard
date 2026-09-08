@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Hermes{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='sato-logo.css') }}">
+<style>
+:root {
+  --bg: #0d1117; --panel: #161b22; --border: #30363d;
+  --text: #c9d1d9; --muted: #8b949e;
+  --accent: #1f6feb; --yellow: #d29922; --green: #3fb950; --red: #f85149;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+       line-height: 1.5; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.topbar { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.5rem;
+          border-bottom: 1px solid var(--border); background: var(--panel); }
+.brand { display: flex; align-items: center; gap: 0.75rem; color: var(--text); }
+.brand:hover { text-decoration: none; }
+.brand-name { font-weight: 600; font-size: 1.1rem; letter-spacing: 0.02em; }
+.brand-sub { display: block; font-size: 0.75rem; color: var(--muted); font-weight: 400; }
+.topbar nav { margin-left: auto; display: flex; gap: 1.25rem; font-size: 0.9rem; }
+
+main { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
+h2 { font-size: 1.05rem; margin: 0 0 0.75rem; font-weight: 600; }
+.sub { color: var(--muted); margin: 0 0 1.5rem; font-size: 0.9rem; }
+
+.card { background: var(--panel); border: 1px solid var(--border);
+        border-radius: 8px; padding: 1.25rem; margin-bottom: 1.25rem; }
+.grid { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.stat-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+             margin-bottom: 1.25rem; }
+.stat { background: var(--panel); border: 1px solid var(--border);
+        border-radius: 8px; padding: 1rem 1.25rem; }
+.stat .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em;
+               color: var(--muted); }
+.stat .value { font-size: 1.75rem; font-weight: 600; margin-top: 0.25rem;
+               font-variant-numeric: tabular-nums; }
+.stat .value.accent { color: var(--accent); }
+.stat .value.yellow { color: var(--yellow); }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th { text-align: left; font-weight: 600; color: var(--muted); font-size: 0.75rem;
+     text-transform: uppercase; letter-spacing: 0.05em;
+     padding: 0 0.5rem 0.5rem; border-bottom: 1px solid var(--border); }
+td { padding: 0.5rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+              font-size: 0.85em; }
+
+.bar { height: 6px; border-radius: 3px; background: var(--accent); min-width: 2px; }
+.bar-track { background: #21262d; border-radius: 3px; width: 100%; }
+
+.chart { width: 100%; height: 120px; display: block; }
+.chart .axis { stroke: var(--border); stroke-width: 1; }
+.chart .col { fill: var(--accent); }
+.chart .col:hover { fill: var(--yellow); }
+
+.empty { color: var(--muted); font-size: 0.9rem; padding: 0.75rem 0; }
+.notice { border: 1px solid var(--yellow); background: rgba(210, 153, 34, 0.1);
+          color: var(--yellow); border-radius: 6px; padding: 0.75rem 1rem;
+          margin-bottom: 1.25rem; font-size: 0.9rem; }
+.notice .mono { color: var(--text); }
+.pill { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px;
+        font-size: 0.75rem; border: 1px solid var(--border); color: var(--muted); }
+.pill.ok { color: var(--green); border-color: var(--green); }
+.pill.err { color: var(--red); border-color: var(--red); }
+footer { color: var(--muted); font-size: 0.8rem; text-align: center;
+         padding: 1.5rem; border-top: 1px solid var(--border); margin-top: 1rem; }
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">
+    <svg class="brand-logo" viewBox="0 0 64 64" role="img" aria-label="Sato Agents">
+      <!-- cabeca: metade humana em cima, metade robo embaixo -->
+      <path class="sk-stroke" d="M20 9 C13 10 11 17 11.5 22 C12 27 15 30 20 30.5 C26 31 32 30 33 24 C34 17 30 10 20 9 Z"/>
+      <path class="sk-stroke" d="M11.6 20.5 C17 19.6 27 19.9 33 20.2"/>
+      <!-- olho humano (traco) e olho robo (quadrado preenchido) -->
+      <path class="sk-stroke" d="M17 15.5 C18.4 14.6 20 14.7 21.2 15.7"/>
+      <rect class="sk-fill-robot" x="16.5" y="23" width="5" height="4" rx="0.8"/>
+      <!-- antena do lado robo -->
+      <path class="sk-stroke sk-robot" d="M28 12.5 C29.5 9.5 30.6 8.2 31.5 5.5"/>
+      <circle class="sk-fill-robot" cx="31.9" cy="4.4" r="2"/>
+      <!-- laser saindo do olho robo -->
+      <path class="sk-stroke sk-laser" d="M22.5 25 L41 24.4"/>
+      <path class="sk-stroke sk-laser" d="M43.5 22.6 L52 21.8"/>
+      <circle class="sk-fill-laser" cx="56" cy="21.4" r="2.4"/>
+      <!-- corpo, bracos e pernas -->
+      <path class="sk-stroke" d="M22 31 C22.6 36 22.2 41 22.5 45.5"/>
+      <path class="sk-stroke" d="M22.2 35 C18.5 37.4 15.6 38.6 12 39.4"/>
+      <path class="sk-stroke sk-robot" d="M22.4 34.4 C27 35.6 30.6 36.8 34 39"/>
+      <path class="sk-stroke" d="M22.5 45.5 C20 49.6 17.6 53.4 15.6 57.5"/>
+      <path class="sk-stroke sk-robot" d="M22.5 45.5 C25.4 49.4 27.6 53.2 29.6 57.6"/>
+    </svg>
+    <span class="brand-name">Sato Agents<span class="brand-sub">Hermes observability</span></span>
+  </a>
+  <nav>
+    <a href="/">Publico</a>
+    <a href="/dashboard">Dashboard</a>
+  </nav>
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+<footer>Hermes &middot; Flask + HTMX &middot; {{ stats.month if stats else '' }}</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>
