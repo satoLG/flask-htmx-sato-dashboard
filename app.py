@@ -19,6 +19,14 @@ PRICING = {
 }
 
 
+# Campos da linha de CPU do top, casados pelo rotulo (us, sy, id, ...).
+CPU_FIELD_RE = re.compile(r"([\d.]+)\s*%?\s*(us|sy|ni|id|wa|hi|si|st)\b")
+CPU_FIELD_NAMES = {
+    "user": "us", "system": "sy", "nice": "ni", "idle": "id",
+    "iowait": "wa", "irq": "hi", "softirq": "si", "steal": "st",
+}
+
+
 @app.after_request
 def add_header(response):
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
@@ -26,16 +34,54 @@ def add_header(response):
     response.headers['Expires'] = '-1'
     return response
 
+class DatabaseUnavailable(Exception):
+    """O events.db nao existe ainda, ou nao tem as tabelas esperadas."""
+
+
 def query(sql, params=()):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute(sql, params)
-    cols = [d[0] for d in c.description] if c.description else []
-    rows = [dict(zip(cols, row)) for row in c.fetchall()]
-    conn.close()
-    return rows
+    """Roda um SELECT no events.db.
+
+    Levanta DatabaseUnavailable (em vez de deixar o sqlite3 estourar 500) quando
+    o banco ainda nao foi criado ou nao tem a tabela: numa instalacao nova isso e
+    o estado normal, e quem chama transforma em "sem dados ainda" na tela.
+    """
+    if not DB_PATH.exists():
+        raise DatabaseUnavailable(f"banco nao encontrado em {DB_PATH}")
+    try:
+        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    except sqlite3.OperationalError as e:
+        raise DatabaseUnavailable(f"nao consegui abrir {DB_PATH}: {e}") from e
+    try:
+        c = conn.cursor()
+        c.execute(sql, params)
+        cols = [d[0] for d in c.description] if c.description else []
+        return [dict(zip(cols, row)) for row in c.fetchall()]
+    except sqlite3.OperationalError as e:
+        raise DatabaseUnavailable(str(e)) from e
+    finally:
+        conn.close()
+
+
+def empty_stats(error=None):
+    """Mesmo formato de get_public_stats(), so que zerado."""
+    stats = {
+        "month": datetime.utcnow().strftime("%Y-%m"),
+        "total_cost": 0, "total_calls": 0,
+        "fallback_count": 0, "fallback_rate": 0,
+        "models": [], "tools": [], "daily": [],
+    }
+    if error:
+        stats["error"] = error
+    return stats
 
 def get_public_stats():
+    try:
+        return _collect_public_stats()
+    except DatabaseUnavailable as e:
+        return empty_stats(str(e))
+
+
+def _collect_public_stats():
     month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
     rows = query("""SELECT model, COUNT(*) as calls,
                            SUM(input_tokens) as inp, SUM(output_tokens) as out,
@@ -222,22 +268,20 @@ def get_vm_stats():
         # Load average
         load1, load5, load15 = map(float, subprocess.check_output("cat /proc/loadavg", shell=True, text=True).split()[:3])
         stats["load_avg"] = {"1min": load1, "5min": load5, "15min": load15}
-        # CPU usage per core? Use top -bn1
+        # CPU usage: le a linha do top pelo rotulo, nao pela posicao.
+        # O procps novo imprime "%Cpu(s):  2.3 us,  1.0 sy, ..." (valor e rotulo
+        # separados) e o antigo "Cpu(s):  2.3%us,  1.0%sy, ...". Pior: quando um
+        # campo chega a 100 o top cola tudo ("ni,100.0 id"), entao indexar a lista
+        # por posicao lia o campo errado - era isso que deixava idle em 0.0 e
+        # fazia a tela mostrar 100% de CPU numa VM ociosa.
         top = subprocess.check_output("top -bn1 | grep 'Cpu(s)'", shell=True, text=True)
-        # top line: "Cpu(s):  2.3%us,  1.0%sy,  0.0%ni, 96.4%id,  0.0%wa,  0.0%hi,  0.0%si,  0.0%st"
         if top:
-            parts = top.strip().split()[1:]
-            # remove commas
-            parts = [p.rstrip(',') for p in parts]
-            stats["cpu_usage"] = {
-                "user": float(parts[0].rstrip('%')),
-                "system": float(parts[2].rstrip('%')),
-                "idle": float(parts[4].rstrip('%')),
-                "iowait": float(parts[6].rstrip('%')),
-                "irq": float(parts[8].rstrip('%')),
-                "softirq": float(parts[10].rstrip('%')),
-                "steal": float(parts[12].rstrip('%')) if len(parts) > 12 else 0.0
-            }
+            fields = {label: value for value, label in CPU_FIELD_RE.findall(top)}
+            if fields:
+                stats["cpu_usage"] = {
+                    name: float(fields.get(key, 0.0))
+                    for name, key in CPU_FIELD_NAMES.items()
+                }
         # Memory
         mem = subprocess.check_output("free -b", shell=True, text=True)
         lines = mem.strip().split('\n')
@@ -312,9 +356,13 @@ def get_status():
                               FROM model_usage ORDER BY id DESC LIMIT 10""")
         status["recent_tools"] = recent_tools
         status["recent_models"] = recent_models
-        # Check if indexer is running (by looking for index_prs_commits.py in processes)
-        ps = subprocess.check_output("ps -eo pid,comm,args | grep index_prs_commits | grep -v grep", shell=True, text=True)
-        status["indexer_running"] = bool(ps.strip())
+        # Check if indexer is running (by looking for index_prs_commits.py in processes).
+        # grep sai com codigo 1 quando nao acha nada - que e o caso normal, o indexer
+        # quase sempre esta parado. Com check_output isso virava CalledProcessError e
+        # derrubava o get_status() inteiro, entao aqui usamos run(check=False).
+        ps = subprocess.run("ps -eo pid,comm,args | grep index_prs_commits | grep -v grep",
+                            shell=True, text=True, capture_output=True)
+        status["indexer_running"] = bool(ps.stdout.strip())
         # Get system uptime
         uptime = subprocess.check_output("cat /proc/uptime", shell=True, text=True).split()[0]
         status["uptime_seconds"] = float(uptime)
@@ -392,11 +440,11 @@ def api_stats():
 def api_rag_children():
     """Return direct children of a node (lazy expansion)."""
     parent = request.args.get("parent", "")
-    if not parent:
+    if not parent or not RAG_PATH.exists():
         return jsonify({"children": [], "parent": parent})
     try:
         import lancedb
-        db = lancedb.connect(str(DB_PATH))
+        db = lancedb.connect(str(RAG_PATH))
         tables = db.list_tables()
         table_list = tables.tables if hasattr(tables, 'tables') else tables
         if "github_docs" not in table_list:
@@ -469,22 +517,28 @@ def dashboard():
 
 @app.route("/api/day/<date>")
 def api_day(date):
-    events = query("""SELECT timestamp, tool_name, duration_ms, success
-                      FROM tool_calls WHERE date(timestamp) = ?
-                      ORDER BY timestamp""", (date,))
-    models = query("""SELECT timestamp, model, latency_ms
-                      FROM model_usage WHERE date(timestamp) = ?
-                      ORDER BY timestamp""", (date,))
+    try:
+        events = query("""SELECT timestamp, tool_name, duration_ms, success
+                          FROM tool_calls WHERE date(timestamp) = ?
+                          ORDER BY timestamp""", (date,))
+        models = query("""SELECT timestamp, model, latency_ms
+                          FROM model_usage WHERE date(timestamp) = ?
+                          ORDER BY timestamp""", (date,))
+    except DatabaseUnavailable as e:
+        return jsonify({"date": date, "events": [], "error": str(e)})
     return jsonify({"date": date, "events": events + models})
 
 @app.route("/api/recent")
 def api_recent():
     limit = request.args.get("limit", 50, type=int)
-    tools = query("""SELECT timestamp, tool_name, duration_ms, success, error
-                     FROM tool_calls ORDER BY id DESC LIMIT ?""", (limit,))
-    models = query("""SELECT timestamp, provider, model, input_tokens,
-                             output_tokens, cost_usd, latency_ms, fallback_reason
-                      FROM model_usage ORDER BY id DESC LIMIT ?""", (limit,))
+    try:
+        tools = query("""SELECT timestamp, tool_name, duration_ms, success, error
+                         FROM tool_calls ORDER BY id DESC LIMIT ?""", (limit,))
+        models = query("""SELECT timestamp, provider, model, input_tokens,
+                                 output_tokens, cost_usd, latency_ms, fallback_reason
+                          FROM model_usage ORDER BY id DESC LIMIT ?""", (limit,))
+    except DatabaseUnavailable as e:
+        return jsonify({"tools": [], "models": [], "error": str(e)})
     return jsonify({"tools": tools, "models": models})
 
 if __name__ == "__main__":
