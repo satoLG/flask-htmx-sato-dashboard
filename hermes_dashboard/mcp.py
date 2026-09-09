@@ -8,14 +8,14 @@ import re
 from datetime import datetime, timedelta
 
 from . import db
-from .config import load_config
+from . import config
 
 CONFIG_KEYS = ["mcp_servers", "mcpServers", "mcp", "servers"]
 TOOL_RE = re.compile(r"^mcp__([^_]+(?:_[^_]+)*?)__(.+)$")
 
 
 def _servers_from_config():
-    data, error = load_config()
+    data, error = config.load_config()
     section = None
     for key in CONFIG_KEYS:
         if isinstance(data.get(key), (dict, list)):
@@ -54,11 +54,18 @@ def _usage(days=30):
     """{servidor: {acao: {calls, failures, avg_ms, last}}} vindo do tool_calls."""
     if "tool_calls" not in db.tables():
         return {}
+    ts = db.pick_column("tool_calls", ["timestamp", "ts", "created_at", "time"])
+    wanted = db.select_list(
+        "tool_calls", ["tool_name", "duration_ms", "success", "error", ts or ""],
+        required=("tool_name",))
+    if not ts or not wanted:
+        return {}
+    expr = db.time_sql("tool_calls", ts)
     since = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    cols = [c for c in wanted if c != ts]
     rows = db.query(
-        "SELECT tool_name, duration_ms, success, error, timestamp FROM tool_calls "
-        "WHERE tool_name LIKE 'mcp\\_\\_%' ESCAPE '\\' AND timestamp >= ?", (since,)
-    )
+        f"SELECT {', '.join(cols + [f'{expr} AS timestamp'])} FROM tool_calls "
+        f"WHERE tool_name LIKE 'mcp\\_\\_%' ESCAPE '\\' AND {expr} >= ?", (since,))
     per = {}
     for r in rows:
         match = TOOL_RE.match(r.get("tool_name") or "")

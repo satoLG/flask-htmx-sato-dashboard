@@ -4,20 +4,20 @@ A coleta de dados mora no pacote hermes_dashboard/; aqui ficam so as rotas.
 Rodar com: python3 app.py  (ou gunicorn app:app)
 """
 import os
+import traceback
 
-from flask import (Flask, jsonify, redirect, render_template, request,
-                   url_for)
+from flask import Flask, jsonify, render_template, request
 
 from hermes_dashboard import activity, cron, mcp, memory, rag, stats, tools, vm
 from hermes_dashboard import db
-from hermes_dashboard.config import DB_PATH, RAG_PATH
+from hermes_dashboard import config
 
 app = Flask(__name__)
 
-# Token do dashboard. Defina HERMES_DASHBOARD_TOKEN na VM; o default so existe
-# pra nao quebrar quem ja usa o link antigo.
-TOKEN = os.environ.get("HERMES_DASHBOARD_TOKEN", "hermes-2026")
-COOKIE = "hermes_token"
+# SEM AUTENTICACAO por decisao explicita: o dashboard e as rotas /api/* estao
+# abertas a quem alcancar a porta. Elas expoem processos, disco, memoria e o
+# config (redigido) da VM - nao publique em interface externa sem por auth na
+# frente (nginx com basic auth, tunel SSH, firewall).
 
 
 @app.after_request
@@ -29,24 +29,24 @@ def add_header(response):
     return response
 
 
-def authorized():
-    """Token no cookie, na query ou no header."""
-    supplied = (request.cookies.get(COOKIE)
-                or request.args.get("token")
-                or request.headers.get("X-Hermes-Token", ""))
-    return supplied == TOKEN
+@app.errorhandler(Exception)
+def handle_unexpected(error):
+    """Rede de seguranca: um painel que quebra nao pode derrubar a pagina.
 
-
-def private(view):
-    """Exige token. Essas rotas expoem processo, disco, memoria e config da VM."""
-    def wrapper(*args, **kwargs):
-        if not authorized():
-            if request.path.startswith("/api/") or request.path.startswith("/fragments/"):
-                return jsonify({"error": "token invalido ou ausente"}), 401
-            return render_template("login.html"), 401
-        return view(*args, **kwargs)
-    wrapper.__name__ = view.__name__
-    return wrapper
+    Sem isso, qualquer excecao nao prevista num coletor virava uma tela de erro
+    do Flask sem explicacao nenhuma pra quem esta olhando o dashboard.
+    """
+    from werkzeug.exceptions import HTTPException
+    if isinstance(error, HTTPException):
+        return error
+    app.logger.exception("erro nao tratado em %s", request.path)
+    detail = f"{type(error).__name__}: {error}"
+    if request.path.startswith("/api/"):
+        return jsonify({"error": detail}), 500
+    if request.path.startswith("/fragments/"):
+        return render_template("fragments/error.html", detail=detail), 200
+    return render_template("error.html", detail=detail,
+                           trace=traceback.format_exc()), 500
 
 
 def json_guard(producer, empty):
@@ -73,31 +73,14 @@ def api_stats():
 
 @app.route("/dashboard")
 def dashboard():
-    if not authorized():
-        return render_template("login.html"), 401
-    if request.args.get("token"):
-        # tira o token da URL e guarda no cookie, pra nao vazar no historico
-        # do browser nem no Referer de link externo
-        response = redirect(url_for("dashboard"))
-        response.set_cookie(COOKIE, TOKEN, httponly=True, samesite="Lax",
-                            secure=request.is_secure, max_age=60 * 60 * 24 * 30)
-        return response
     return render_template("dashboard.html", stats=stats.public_stats(),
                            models=stats.models_config(),
-                           paths={"db": str(DB_PATH), "rag": str(RAG_PATH)})
-
-
-@app.route("/logout")
-def logout():
-    response = redirect(url_for("public"))
-    response.delete_cookie(COOKIE)
-    return response
+                           paths={"db": str(config.DB_PATH), "rag": str(config.RAG_PATH)})
 
 
 # --- aba: atividade ---
 
 @app.route("/api/activity/heatmap")
-@private
 def api_heatmap():
     days = max(30, min(731, request.args.get("days", 365, type=int)))
     kinds = [k for k in request.args.get("kinds", "").split(",") if k]
@@ -106,7 +89,6 @@ def api_heatmap():
 
 
 @app.route("/api/activity/day/<date>")
-@private
 def api_activity_day(date):
     kinds = [k for k in request.args.get("kinds", "").split(",") if k]
     return json_guard(lambda: activity.day_activity(date, kinds or None),
@@ -114,13 +96,11 @@ def api_activity_day(date):
 
 
 @app.route("/api/live")
-@private
 def api_live():
     return jsonify(activity.live_snapshot())
 
 
 @app.route("/fragments/live")
-@private
 def fragment_live():
     """Fragmento HTML para o htmx trocar sozinho no topo da aba de atividade."""
     return render_template("fragments/live.html", live=activity.live_snapshot())
@@ -129,7 +109,6 @@ def fragment_live():
 # --- aba: VM ---
 
 @app.route("/api/vmstats")
-@private
 def api_vmstats():
     breakdown = request.args.get("breakdown", "1") != "0"
     return jsonify(vm.snapshot(with_breakdown=breakdown))
@@ -138,7 +117,6 @@ def api_vmstats():
 # --- aba: tools ---
 
 @app.route("/api/tools")
-@private
 def api_tools():
     days = max(1, min(365, request.args.get("days", 30, type=int)))
     return jsonify(tools.catalog(days))
@@ -147,7 +125,6 @@ def api_tools():
 # --- aba: MCPs ---
 
 @app.route("/api/mcps")
-@private
 def api_mcps():
     days = max(1, min(365, request.args.get("days", 30, type=int)))
     return jsonify(mcp.servers(days))
@@ -156,13 +133,11 @@ def api_mcps():
 # --- aba: memoria ---
 
 @app.route("/api/memory")
-@private
 def api_memory():
     return jsonify(memory.catalog())
 
 
 @app.route("/api/memory/doc")
-@private
 def api_memory_doc():
     path = request.args.get("path", "")
     if not path:
@@ -178,19 +153,16 @@ def api_memory_doc():
 # --- aba: RAG ---
 
 @app.route("/api/rag/graph")
-@private
 def api_rag_graph():
     return jsonify(rag.graph(request.args.get("parent") or None))
 
 
 @app.route("/api/rag/list")
-@private
 def api_rag_list():
     return jsonify(rag.catalog())
 
 
 @app.route("/api/rag/search")
-@private
 def api_rag_search():
     q = request.args.get("q", "").strip()
     if not q:
@@ -203,7 +175,6 @@ def api_rag_search():
 # --- aba: cron ---
 
 @app.route("/api/cronjobs")
-@private
 def api_cronjobs():
     return jsonify(cron.overview())
 
@@ -211,13 +182,11 @@ def api_cronjobs():
 # --- compatibilidade com a versao anterior da API ---
 
 @app.route("/api/models")
-@private
 def api_models():
     return jsonify(stats.models_config())
 
 
 @app.route("/api/status")
-@private
 def api_status():
     live = activity.live_snapshot()
     return jsonify({
@@ -230,7 +199,6 @@ def api_status():
 
 
 @app.route("/api/recent")
-@private
 def api_recent():
     limit = max(1, min(500, request.args.get("limit", 50, type=int)))
     try:
@@ -247,7 +215,6 @@ def api_recent():
 
 
 @app.route("/api/day/<date>")
-@private
 def api_day(date):
     return json_guard(lambda: activity.day_activity(date),
                       {"date": date, "events": [], "count": 0})

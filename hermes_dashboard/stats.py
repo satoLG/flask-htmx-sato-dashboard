@@ -26,29 +26,36 @@ def public_stats():
 def _collect():
     month_start = datetime.utcnow().replace(
         day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    # so agregamos as colunas que existem: um events.db sem cost_usd nao deve
+    # zerar a pagina publica inteira
+    mu = db.columns("model_usage")
+    cost_expr = "SUM(cost_usd)" if "cost_usd" in mu else "0"
+    mts = db.time_sql("model_usage", "timestamp")
+    tts = db.time_sql("tool_calls", "timestamp")
     rows = db.query(
-        """SELECT model, COUNT(*) AS calls,
-                  SUM(input_tokens) AS inp, SUM(output_tokens) AS out,
-                  SUM(cost_usd) AS cost
-           FROM model_usage WHERE timestamp > ?
-           GROUP BY model ORDER BY calls DESC""", (month_start,))
+        f"""SELECT model, COUNT(*) AS calls, {cost_expr} AS cost
+            FROM model_usage WHERE {mts} > ?
+            GROUP BY model ORDER BY calls DESC""", (month_start,))
     total_cost = sum(r.get("cost") or 0 for r in rows)
     total_calls = sum(r["calls"] for r in rows)
     # COALESCE porque fallback_reason NULL nao satisfaz "!= ''" no sqlite e a
     # contagem de fallback saia menor do que a real.
-    fb = db.query(
-        """SELECT COUNT(*) AS fb FROM model_usage
-           WHERE timestamp > ? AND COALESCE(fallback_reason, '') != ''""",
-        (month_start,))
-    fallback_count = fb[0]["fb"] if fb else 0
+    if "fallback_reason" in mu:
+        fb = db.query(
+            """SELECT COUNT(*) AS fb FROM model_usage
+               WHERE """ + mts + """ > ? AND COALESCE(fallback_reason, '') != ''""",
+            (month_start,))
+        fallback_count = fb[0]["fb"] if fb else 0
+    else:
+        fallback_count = 0
     tool_rows = db.query(
-        """SELECT tool_name, COUNT(*) AS calls FROM tool_calls
-           WHERE timestamp > ? GROUP BY tool_name ORDER BY calls DESC""",
+        f"""SELECT tool_name, COUNT(*) AS calls FROM tool_calls
+            WHERE {tts} > ? GROUP BY tool_name ORDER BY calls DESC""",
         (month_start,))
     daily = db.query(
-        """SELECT date(timestamp) AS day, COUNT(*) AS calls FROM model_usage
-           WHERE timestamp > datetime('now', '-30 days')
-           GROUP BY date(timestamp) ORDER BY day""")
+        f"""SELECT date({mts}) AS day, COUNT(*) AS calls FROM model_usage
+            WHERE {mts} > datetime('now', '-30 days')
+            GROUP BY date({mts}) ORDER BY day""")
     return {
         "month": datetime.utcnow().strftime("%Y-%m"),
         "total_cost": round(total_cost, 4),
@@ -68,20 +75,21 @@ def _collect():
 
 def models_config():
     """Modelo primario e cadeia de fallback, do config.yaml."""
-    from .config import load_config, PRICING
-    data, error = load_config()
+    from . import config
+    data, error = config.load_config()
     info = {"primary": "unknown", "fallbacks": []}
     if error:
         info["error"] = error
         return info
-    model = data.get("model", {}) or {}
+    model = config.as_dict(data.get("model"))
     info["primary"] = f"{model.get('provider', '?')}/{model.get('default', '?')}"
-    fallbacks = data.get("fallback_providers") or model.get("fallback_providers") or []
+    fallbacks = config.as_list(data.get("fallback_providers")
+                               or model.get("fallback_providers"))
     for fb in fallbacks:
         if isinstance(fb, dict):
             info["fallbacks"].append({
                 "provider": fb.get("provider", "?"),
                 "model": fb.get("model", "?"),
-                "cost": PRICING.get(fb.get("model", ""), (0, 0)),
+                "cost": config.PRICING.get(fb.get("model", ""), (0, 0)),
             })
     return info

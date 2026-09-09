@@ -7,7 +7,7 @@ isso, um ../../etc/passwd viraria download.
 import re
 from pathlib import Path
 
-from .config import HERMES_HOME, CONFIG_PATH
+from . import config
 
 MAX_BYTES = 400_000
 # Chaves cujo valor nunca vai pro browser. O config.yaml guarda credencial de
@@ -24,8 +24,8 @@ TEXT_SUFFIXES = {".md", ".txt", ".yaml", ".yml", ".json", ".toml", ".cfg", ".ini
 
 def _roots():
     """Diretorios de onde e permitido ler, ja resolvidos."""
-    roots = [HERMES_HOME / "memories", HERMES_HOME / "skills",
-             HERMES_HOME / "contexts", HERMES_HOME]
+    roots = [config.HERMES_HOME / "memories", config.HERMES_HOME / "skills",
+             config.HERMES_HOME / "contexts", config.HERMES_HOME]
     roots.append(Path.cwd())
     out = []
     for r in roots:
@@ -70,8 +70,8 @@ def catalog():
     docs = []
     skills = []
 
-    for folder, category in [(HERMES_HOME / "memories", "memoria"),
-                             (HERMES_HOME / "contexts", "contexto")]:
+    for folder, category in [(config.HERMES_HOME / "memories", "memoria"),
+                             (config.HERMES_HOME / "contexts", "contexto")]:
         if folder.is_dir():
             for f in sorted(folder.rglob("*")):
                 if f.is_file() and f.suffix in TEXT_SUFFIXES:
@@ -79,7 +79,7 @@ def catalog():
                     if entry:
                         docs.append(entry)
 
-    skills_dir = HERMES_HOME / "skills"
+    skills_dir = config.HERMES_HOME / "skills"
     if skills_dir.is_dir():
         for skill_md in sorted(skills_dir.rglob("SKILL.md")):
             rel = skill_md.parent.relative_to(skills_dir).parts
@@ -97,8 +97,8 @@ def catalog():
             if entry:
                 docs.append(entry)
 
-    if CONFIG_PATH.is_file():
-        entry = _entry(CONFIG_PATH, "config")
+    if config.CONFIG_PATH.is_file():
+        entry = _entry(config.CONFIG_PATH, "config")
         if entry:
             docs.append(entry)
 
@@ -112,8 +112,8 @@ def catalog():
         "total_bytes": total,
         "by_category": by_category,
         "count": len(docs) + len(skills),
-        "hermes_home": str(HERMES_HOME),
-        "exists": HERMES_HOME.exists(),
+        "hermes_home": str(config.HERMES_HOME),
+        "exists": config.HERMES_HOME.exists(),
     }
 
 
@@ -129,7 +129,7 @@ def read_document(raw_path):
         raise ValueError(f"tipo nao suportado: {resolved.suffix}")
     data = resolved.read_bytes()[:MAX_BYTES]
     text = data.decode("utf-8", errors="replace")
-    redacted = resolved == CONFIG_PATH.resolve()
+    redacted = resolved == config.CONFIG_PATH.resolve()
     if redacted:
         text = redact_secrets(text)
     stat = resolved.stat()

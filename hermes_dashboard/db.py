@@ -5,7 +5,7 @@ o schema na VM pode ter mais (ou menos) tabelas do que aqui. Nada de assumir
 que uma tabela existe; quem chama pergunta antes com table_exists().
 """
 import sqlite3
-from .config import DB_PATH
+from . import config
 
 
 class DatabaseUnavailable(Exception):
@@ -13,12 +13,12 @@ class DatabaseUnavailable(Exception):
 
 
 def connect():
-    if not DB_PATH.exists():
-        raise DatabaseUnavailable(f"banco nao encontrado em {DB_PATH}")
+    if not config.DB_PATH.exists():
+        raise DatabaseUnavailable(f"banco nao encontrado em {config.DB_PATH}")
     try:
-        return sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        return sqlite3.connect(f"file:{config.DB_PATH}?mode=ro", uri=True)
     except sqlite3.OperationalError as e:
-        raise DatabaseUnavailable(f"nao consegui abrir {DB_PATH}: {e}") from e
+        raise DatabaseUnavailable(f"nao consegui abrir {config.DB_PATH}: {e}") from e
 
 
 def query(sql, params=()):
@@ -65,6 +65,46 @@ def _ident(name):
     if not name.replace("_", "").isalnum():
         raise ValueError(f"nome de tabela invalido: {name!r}")
     return name
+
+
+def time_sql(table, column):
+    """Expressao SQL que devolve o timestamp como texto ISO, seja qual for o
+    formato guardado.
+
+    Nem toda instalacao grava ISO: inteiro unix (segundos ou milissegundos) e
+    igualmente comum. Com epoch, `date(coluna)` devolve NULL e o dashboard
+    inteiro aparece zerado - sem erro nenhum, o que e pior que quebrar.
+    """
+    ident = _ident(table)
+    col = _ident(column)
+    try:
+        rows = query(f"SELECT {col} AS v FROM {ident} "
+                     f"WHERE {col} IS NOT NULL LIMIT 1")
+    except DatabaseUnavailable:
+        return col
+    if not rows:
+        return col
+    value = rows[0]["v"]
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        # ~1e12 ja e ano 33658 em segundos; nessa faixa so pode ser ms
+        unit = f"{col} / 1000" if value > 1e12 else col
+        return f"datetime({unit}, 'unixepoch')"
+    return col
+
+
+def select_list(table, wanted, required=()):
+    """SELECT com so as colunas que existem.
+
+    O events.db da VM pode nao ter `error` ou `cost_usd`; pedir uma coluna
+    ausente e OperationalError, e ai a aba inteira some. Melhor trazer o que
+    existe e deixar o resto None.
+    """
+    cols = columns(table)
+    chosen = [c for c in wanted if c in cols]
+    for name in required:
+        if name not in cols:
+            return None
+    return chosen or None
 
 
 def pick_column(table, candidates):
