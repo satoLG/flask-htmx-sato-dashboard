@@ -124,11 +124,12 @@ def filesystems():
     return out
 
 
-def disk_breakdown(path="/", limit=12, timeout=25):
+def disk_breakdown(path="/", limit=12, timeout=8):
     """O que ocupa espaco dentro de `path`, um nivel abaixo.
 
     `du` numa raiz grande e caro, entao o resultado fica em cache por 10 min e a
-    chamada tem timeout: melhor devolver 'nao deu tempo' do que segurar a request.
+    chamada tem timeout curto: o worker do gunicorn morre em 30s por padrao, e um
+    du de 25s somado ao resto da coleta chegava perto demais desse limite.
     """
     def run():
         try:

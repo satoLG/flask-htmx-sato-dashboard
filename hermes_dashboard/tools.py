@@ -35,14 +35,22 @@ def stats(days=30):
     if "tool_calls" not in db.tables():
         return {"tools": [], "total_calls": 0, "days": days,
                 "error": "tabela tool_calls nao existe no events.db"}
-    cols = db.columns("tool_calls")
+    ts = db.pick_column("tool_calls", ["timestamp", "ts", "created_at", "time"])
+    if not ts:
+        return {"tools": [], "total_calls": 0, "days": days,
+                "error": "tool_calls nao tem coluna de tempo reconhecivel"}
+    wanted = db.select_list(
+        "tool_calls", ["tool_name", "duration_ms", "success", "error", ts],
+        required=("tool_name",))
+    if not wanted:
+        return {"tools": [], "total_calls": 0, "days": days,
+                "error": "tool_calls nao tem a coluna tool_name"}
+    expr = db.time_sql("tool_calls", ts)
     since = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    cols = [c for c in wanted if c != ts]
     rows = db.query(
-        "SELECT tool_name, duration_ms, success, error, timestamp FROM tool_calls "
-        "WHERE timestamp >= ?", (since,)
-    ) if "duration_ms" in cols else db.query(
-        "SELECT tool_name, timestamp FROM tool_calls WHERE timestamp >= ?", (since,)
-    )
+        f"SELECT {', '.join(cols + [f'{expr} AS timestamp'])} FROM tool_calls "
+        f"WHERE {expr} >= ?", (since,))
 
     per = {}
     for r in rows:

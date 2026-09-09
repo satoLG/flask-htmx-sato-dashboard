@@ -10,7 +10,7 @@ import subprocess
 from datetime import datetime, timedelta, date as date_cls
 
 from . import db
-from .config import find_log_file
+from . import config
 
 TS_CANDIDATES = ["timestamp", "ts", "created_at", "started_at", "start_time", "time"]
 
@@ -37,6 +37,16 @@ def available_kinds():
     return found
 
 
+def time_expr(table, ts):
+    """Expressao ISO da coluna de tempo.
+
+    Sem cache de proposito: a consulta de deteccao e uma linha so, e um cache
+    por processo daria resposta errada se o banco fosse trocado embaixo (foi
+    exatamente o que aconteceu no teste que trocava de fixture).
+    """
+    return db.time_sql(table, ts)
+
+
 def heatmap(days=365, kinds=None):
     """Contagem por dia, por tipo, cobrindo TODO o intervalo (inclusive zeros).
 
@@ -46,18 +56,18 @@ def heatmap(days=365, kinds=None):
     sources = [s for s in available_kinds() if not kinds or s[0] in kinds]
     missing = None
     if not sources:
-        from .config import DB_PATH
-        missing = (f"nenhuma tabela de eventos em {DB_PATH}"
-                   if not DB_PATH.exists() else
-                   f"{DB_PATH} nao tem as tabelas de atividade esperadas")
+        missing = (f"nenhuma tabela de eventos em {config.DB_PATH}"
+                   if not config.DB_PATH.exists() else
+                   f"{config.DB_PATH} nao tem as tabelas de atividade esperadas")
     end = datetime.utcnow().date()
     start = end - timedelta(days=days - 1)
     counts = {}
     totals_by_kind = {}
     for kind, table, ts, _label in sources:
+        expr = time_expr(table, ts)
         rows = db.query(
-            f"SELECT date({ts}) AS d, COUNT(*) AS n FROM {db._ident(table)} "
-            f"WHERE date({ts}) >= ? GROUP BY d",
+            f"SELECT date({expr}) AS d, COUNT(*) AS n FROM {db._ident(table)} "
+            f"WHERE date({expr}) >= ? GROUP BY d",
             (start.isoformat(),),
         )
         for r in rows:
@@ -97,13 +107,23 @@ def _row_label(kind, row):
     return kind
 
 
+def _clock(when):
+    """HH:MM:SS de um timestamp, sem assumir que ele e string."""
+    text = str(when or "")
+    if len(text) >= 19 and text[10] in " T":
+        return text[11:19]
+    return text[:8]
+
+
 def _normalize(kind, row, ts_col):
     """Achata a linha de qualquer tabela num formato unico para a timeline."""
     ok = row.get("success")
     error = row.get("error") or row.get("fallback_reason") or ""
+    when = row.get(ts_col)
     return {
         "kind": kind,
-        "when": row.get(ts_col),
+        "when": when,
+        "clock": _clock(when),
         "name": _row_label(kind, row),
         "model": row.get("model"),
         "provider": row.get("provider"),
@@ -121,12 +141,13 @@ def day_activity(day, kinds=None, limit=500):
     sources = [s for s in available_kinds() if not kinds or s[0] in kinds]
     events = []
     for kind, table, ts, _label in sources:
+        expr = time_expr(table, ts)
         rows = db.query(
-            f"SELECT * FROM {db._ident(table)} WHERE date({ts}) = ? "
-            f"ORDER BY {ts} LIMIT ?",
+            f"SELECT *, {expr} AS _iso_ts FROM {db._ident(table)} "
+            f"WHERE date({expr}) = ? ORDER BY {ts} LIMIT ?",
             (day, limit),
         )
-        events += [_normalize(kind, r, ts) for r in rows]
+        events += [_normalize(kind, r, "_iso_ts") for r in rows]
     events.sort(key=lambda e: str(e["when"]))
     summary = {}
     for e in events:
@@ -224,7 +245,7 @@ def _isnum(v):
 
 
 def _log_tail(lines=25):
-    path = find_log_file()
+    path = config.find_log_file()
     if not path:
         return {"path": None, "lines": []}
     try:
@@ -243,12 +264,13 @@ def live_snapshot(window_seconds=180):
     db_error = None
     try:
         for kind, table, ts, _label in available_kinds():
+            expr = time_expr(table, ts)
             rows = db.query(
-                f"SELECT * FROM {db._ident(table)} WHERE {ts} >= ? "
-                f"ORDER BY {ts} DESC LIMIT 15",
+                f"SELECT *, {expr} AS _iso_ts FROM {db._ident(table)} "
+                f"WHERE {expr} >= ? ORDER BY {ts} DESC LIMIT 15",
                 (cutoff,),
             )
-            recent += [_normalize(kind, r, ts) for r in rows]
+            recent += [_normalize(kind, r, "_iso_ts") for r in rows]
     except db.DatabaseUnavailable as e:
         db_error = str(e)
     recent.sort(key=lambda e: str(e["when"]), reverse=True)

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Hermes - erro{% endblock %}
+{% block content %}
+<div class="panel-head">
+  <h1>Algo quebrou nesta pagina</h1>
+  <p>O erro abaixo veio do servidor. Ele tambem esta no log do processo.</p>
+</div>
+<div class="card">
+  <div class="notice" style="margin-bottom: var(--sp-4)">
+    <span class="mono">{{ detail }}</span>
+  </div>
+  <details>
+    <summary class="muted" style="cursor: pointer; font-size: 0.85rem">ver stack trace</summary>
+    <pre class="doc-content" style="margin-top: var(--sp-3)">{{ trace }}</pre>
+  </details>
+  <p class="muted" style="font-size: 0.8rem; margin-top: var(--sp-4)">
+    Rode <span class="mono">python3 tools/selfcheck.py</span> na VM para um diagnostico completo.
+  </p>
+</div>
+{% endblock %}

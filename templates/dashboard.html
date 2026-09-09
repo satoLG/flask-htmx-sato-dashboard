@@ -8,7 +8,9 @@
 {% endblock %}
 
 {% block actions %}
-<a href="{{ url_for('logout') }}" class="muted">sair</a>
+<span class="pill warn" title="Qualquer um com a URL ve tudo desta pagina">
+  <span class="ico">!</span>acesso aberto
+</span>
 {% endblock %}
 
 {% block nav %}

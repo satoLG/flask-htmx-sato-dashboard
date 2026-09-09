@@ -8,17 +8,21 @@ import sqlite3
 import subprocess
 from datetime import datetime
 
-from .config import CRON_DIR
+from . import config
 
-JOBS_PATH = CRON_DIR / "jobs.json"
-EXEC_DB = CRON_DIR / "executions.db"
+def _jobs_path():
+    return config.CRON_DIR / "jobs.json"
+
+
+def _exec_db():
+    return config.CRON_DIR / "executions.db"
 
 
 def _hermes_jobs():
-    if not JOBS_PATH.exists():
+    if not _jobs_path().exists():
         return [], None
     try:
-        with open(JOBS_PATH) as f:
+        with open(_jobs_path()) as f:
             data = json.load(f)
     except (OSError, ValueError) as e:
         return [], str(e)
@@ -31,7 +35,7 @@ def _hermes_jobs():
     elif isinstance(data, list):
         jobs = [j for j in data if isinstance(j, dict)]
     else:
-        return [], f"formato inesperado em {JOBS_PATH}"
+        return [], f"formato inesperado em {_jobs_path()}"
     out = []
     for job in jobs:
         out.append({
@@ -99,10 +103,10 @@ def _systemd_timers():
 
 
 def _executions(limit=60):
-    if not EXEC_DB.exists():
+    if not _exec_db().exists():
         return [], None
     try:
-        conn = sqlite3.connect(f"file:{EXEC_DB}?mode=ro", uri=True)
+        conn = sqlite3.connect(f"file:{_exec_db()}?mode=ro", uri=True)
     except sqlite3.OperationalError as e:
         return [], str(e)
     try:
@@ -156,5 +160,5 @@ def overview():
         "sources": sorted({j["source"] for j in jobs}),
         "jobs_error": jobs_error,
         "executions_error": exec_error,
-        "cron_dir": str(CRON_DIR),
+        "cron_dir": str(config.CRON_DIR),
     }

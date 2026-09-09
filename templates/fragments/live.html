@@ -31,7 +31,7 @@
     <div class="timeline" style="margin-top: var(--sp-3)">
       {% for e in live.events[:6] %}
         <div class="event kind-{{ e.kind }}{% if not e.ok %} failed{% endif %}">
-          <span class="time">{{ e.when[11:19] if e.when else '' }}</span>
+          <span class="time">{{ e.clock }}</span>
           <span class="name">{{ e.name }}</span>
           <span class="detail">
             {{ e.kind }}{% if e.model %} &middot; {{ e.model }}{% endif %}

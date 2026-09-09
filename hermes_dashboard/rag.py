@@ -4,7 +4,7 @@ A leitura do lancedb (documents(), search()) fica separada da montagem do grafo
 (build_graph, build_search_graph): assim o formato do mapa mental e testavel sem
 banco vetorial nenhum, e a tela degrada pra "RAG nao configurado" sem quebrar.
 """
-from .config import RAG_PATH
+from . import config
 
 TABLE = "github_docs"
 ROOT_ID = "root"
@@ -35,13 +35,13 @@ def _get_embed_model():
 
 def _open_table():
     """Abre a tabela do lancedb. Levanta RuntimeError com motivo legivel."""
-    if not RAG_PATH.exists():
-        raise RuntimeError(f"base vetorial nao encontrada em {RAG_PATH}")
+    if not config.RAG_PATH.exists():
+        raise RuntimeError(f"base vetorial nao encontrada em {config.RAG_PATH}")
     try:
         import lancedb
     except ImportError as e:
         raise RuntimeError("lancedb nao instalado") from e
-    db = lancedb.connect(str(RAG_PATH))
+    db = lancedb.connect(str(config.RAG_PATH))
     tables = db.list_tables()
     table_list = tables.tables if hasattr(tables, "tables") else tables
     if TABLE not in table_list:
@@ -80,12 +80,25 @@ def documents(preview=200):
     return _records(df, preview)
 
 
+def _describe_failure(e):
+    """Mensagem legivel para qualquer falha da base vetorial.
+
+    lancedb/pyarrow/pandas levantam de tudo (ImportError, OSError, KeyError,
+    ValueError, ate MemoryError numa tabela grande). Nenhuma dessas pode virar
+    500: a aba mostra o motivo e as outras seis seguem funcionando.
+    """
+    if isinstance(e, RuntimeError):
+        return str(e)
+    return f"falha ao ler a base vetorial ({type(e).__name__}): {e}"
+
+
 def catalog():
     """Lista completa + contagens por repo e por tipo."""
     try:
         docs = documents()
-    except RuntimeError as e:
-        return {"docs": [], "by_repo": {}, "by_type": {}, "total": 0, "error": str(e)}
+    except Exception as e:
+        return {"docs": [], "by_repo": {}, "by_type": {}, "total": 0,
+                "error": _describe_failure(e)}
     by_repo, by_type = {}, {}
     for d in docs:
         repo = d.get("repo") or "sem repo"
@@ -171,8 +184,9 @@ def build_graph(docs, parent=None, doc_limit=60):
 def graph(parent=None):
     try:
         docs = documents(preview=160)
-    except RuntimeError as e:
-        return {"parent": parent or ROOT_ID, "nodes": [], "edges": [], "error": str(e)}
+    except Exception as e:
+        return {"parent": parent or ROOT_ID, "nodes": [], "edges": [],
+                "error": _describe_failure(e)}
     return build_graph(docs, parent)
 
 
@@ -224,7 +238,10 @@ def search(query_text, limit=12):
         return []
     tbl = _open_table()
     model = _get_embed_model()
-    vector = list(model.embed([query_text[:4000]]))[0].tolist()
+    raw = next(iter(model.embed([query_text[:4000]])))
+    # o fastembed devolve ndarray, mas nem toda versao/backend devolve - aceitar
+    # os dois evita um AttributeError no meio da busca
+    vector = raw.tolist() if hasattr(raw, "tolist") else list(raw)
     df = tbl.search(vector).limit(limit).to_pandas()
     return _records(df, preview=400)
 
@@ -232,9 +249,8 @@ def search(query_text, limit=12):
 def search_result(query_text, limit=12):
     try:
         hits = search(query_text, limit)
-    except RuntimeError as e:
-        return {"query": query_text, "hits": [], "graph": None, "error": str(e)}
-    except Exception as e:  # fastembed baixando modelo, OOM, etc
-        return {"query": query_text, "hits": [], "graph": None, "error": str(e)}
-    return {"query": query_text, "hits": hits,
-            "graph": build_search_graph(query_text, hits)}
+        return {"query": query_text, "hits": hits,
+                "graph": build_search_graph(query_text, hits)}
+    except Exception as e:
+        return {"query": query_text, "hits": [], "graph": None,
+                "error": _describe_failure(e)}
