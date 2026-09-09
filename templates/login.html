@@ -1,27 +1,33 @@
 <!DOCTYPE html>
-<html lang="pt-br"><head>
+<html lang="pt-br">
+<head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hermes Login</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Hermes - acesso</title>
+<link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 <style>
-body { font-family: sans-serif; background: #0d1117; color: #c9d1d9;
-       display: flex; align-items: center; justify-content: center; height: 100vh; }
-.box { background: #161b22; border: 1px solid #30363d; padding: 2rem;
-       border-radius: 8px; text-align: center; max-width: 400px; }
-input { background: #0d1117; color: #c9d1d9; border: 1px solid #30363d;
-        padding: 0.75rem; border-radius: 4px; width: 100%; margin: 1rem 0; box-sizing: border-box; }
-button { padding: 0.75rem 2rem; background: #1f6feb; color: white;
-         border: none; border-radius: 6px; cursor: pointer; width: 100%; }
-.err { color: #f85149; margin-top: 1rem; }
-</style></head>
+body { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: var(--sp-4); }
+.login { width: 100%; max-width: 380px; text-align: center; }
+.login .card { margin: 0; }
+.login h1 { font-size: 1.2rem; margin-bottom: var(--sp-2); }
+.login p { color: var(--muted); font-size: 0.85rem; margin-bottom: var(--sp-4); }
+.login input { margin-bottom: var(--sp-3); text-align: center; }
+</style>
+</head>
 <body>
-<div class="box">
-  <h2>🔐 Hermes Dashboard</h2>
-  <p>Enter access token</p>
-  <form method="get" action="/dashboard">
-    <input name="token" placeholder="hermes-2026" autofocus />
-    <button type="submit">Enter</button>
-  </form>
-  {% if error %}<div class="err">{{ error }}</div>{% endif %}
+<div class="login">
+  <div class="card">
+    <h1>Dashboard do Hermes</h1>
+    <p>Informe o token de acesso.</p>
+    <form method="get" action="{{ url_for('dashboard') }}">
+      <input name="token" type="password" placeholder="token" autofocus
+             autocomplete="current-password" aria-label="Token de acesso">
+      <button class="btn" type="submit" style="width: 100%">Entrar</button>
+    </form>
+    {% if error %}<p class="notice" style="margin-top: var(--sp-3)">{{ error }}</p>{% endif %}
+  </div>
 </div>
-</body></html>
+</body>
+</html>

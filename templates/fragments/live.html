@@ -1,0 +1,57 @@
+{# Fragmento trocado pelo htmx a cada 3s no topo da aba de atividade. #}
+<div class="card live {% if live.busy %}busy{% endif %}">
+  <div class="live-head">
+    <span class="live-dot" aria-hidden="true"></span>
+    <h2>{% if live.busy %}Processando agora{% else %}Ocioso{% endif %}</h2>
+    <span class="when">janela de {{ live.window_seconds }}s &middot; atualiza a cada 3s</span>
+  </div>
+
+  {% if live.error %}
+    <p class="empty">{{ live.error }}</p>
+  {% endif %}
+
+  {% if live.processes %}
+    <div class="tags" style="margin-top: var(--sp-3)">
+      {% for p in live.processes %}
+        <span class="pill {% if p.role == 'subagente' %}warn{% else %}ok{% endif %}"
+              title="{{ p.command }}">
+          {{ p.role }} &middot; pid {{ p.pid }} &middot; {{ p.cpu }}% cpu
+        </span>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if live.models %}
+    <div class="tags" style="margin-top: var(--sp-3)">
+      {% for m in live.models %}<span class="pill">{{ m }}</span>{% endfor %}
+    </div>
+  {% endif %}
+
+  {% if live.events %}
+    <div class="timeline" style="margin-top: var(--sp-3)">
+      {% for e in live.events[:6] %}
+        <div class="event kind-{{ e.kind }}{% if not e.ok %} failed{% endif %}">
+          <span class="time">{{ e.when[11:19] if e.when else '' }}</span>
+          <span class="name">{{ e.name }}</span>
+          <span class="detail">
+            {{ e.kind }}{% if e.model %} &middot; {{ e.model }}{% endif %}
+            {%- if e.duration_ms %} &middot; {{ e.duration_ms }}ms{% endif %}
+            {%- if e.error %} &middot; {{ e.error }}{% endif %}
+          </span>
+        </div>
+      {% endfor %}
+    </div>
+  {% elif not live.processes %}
+    <p class="empty">nenhuma atividade nos ultimos {{ live.window_seconds }}s</p>
+  {% endif %}
+
+  {% if live.log.lines %}
+    <details style="margin-top: var(--sp-3)">
+      <summary class="muted" style="cursor: pointer; font-size: 0.8rem">
+        log: {{ live.log.path }}
+      </summary>
+      <pre class="log-tail">{% for line in live.log.lines %}{{ line }}
+{% endfor %}</pre>
+    </details>
+  {% endif %}
+</div>

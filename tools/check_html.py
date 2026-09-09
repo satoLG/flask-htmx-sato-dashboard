@@ -165,7 +165,7 @@ def main(argv):
     if argv:
         targets = [Path(a) for a in argv]
     else:
-        targets = sorted((ROOT / "templates").glob("*.html"))
+        targets = sorted((ROOT / "templates").rglob("*.html"))
     if not targets:
         print("nenhum template encontrado em templates/")
         return 1

@@ -1,322 +1,158 @@
 {% extends "base.html" %}
 {% block title %}Hermes - Dashboard{% endblock %}
+{% block subtitle %}Dashboard interno{% endblock %}
 
 {% block head %}
-<style>
-.panel-head { display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 0.75rem; }
-.panel-head h2 { margin: 0; }
-.panel-head .when { margin-left: auto; font-size: 0.75rem; color: var(--muted); }
-.kv { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1rem; font-size: 0.9rem; }
-.kv dt { color: var(--muted); }
-.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
-.meter { height: 8px; border-radius: 4px; background: #21262d; overflow: hidden; margin-top: 0.35rem; }
-.meter > span { display: block; height: 100%; background: var(--accent); }
-.meter.hot > span { background: var(--yellow); }
-.search { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
-.search input { flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border);
-                padding: 0.5rem 0.75rem; border-radius: 6px; }
-.search button { background: var(--accent); color: #fff; border: none; border-radius: 6px;
-                 padding: 0.5rem 1rem; cursor: pointer; }
-.scroll { max-height: 320px; overflow-y: auto; }
-.result { border-bottom: 1px solid var(--border); padding: 0.6rem 0; font-size: 0.9rem; }
-.result:last-child { border-bottom: none; }
-.result .meta { color: var(--muted); font-size: 0.75rem; }
-.tags { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-</style>
+<script src="{{ url_for('static', filename='vendor/htmx.min.js') }}" defer></script>
+<script src="{{ url_for('static', filename='vendor/cytoscape.min.js') }}" defer></script>
+{% endblock %}
+
+{% block actions %}
+<a href="{{ url_for('logout') }}" class="muted">sair</a>
+{% endblock %}
+
+{% block nav %}
+<nav class="tabs" role="tablist" aria-label="Secoes do dashboard">
+  <button class="tab" type="button" role="tab" data-tab="atividade" aria-selected="true" aria-controls="panel-atividade">Atividade</button>
+  <button class="tab" type="button" role="tab" data-tab="vm" aria-selected="false" aria-controls="panel-vm">VM</button>
+  <button class="tab" type="button" role="tab" data-tab="tools" aria-selected="false" aria-controls="panel-tools">Tools</button>
+  <button class="tab" type="button" role="tab" data-tab="mcps" aria-selected="false" aria-controls="panel-mcps">MCPs</button>
+  <button class="tab" type="button" role="tab" data-tab="memoria" aria-selected="false" aria-controls="panel-memoria">Memoria</button>
+  <button class="tab" type="button" role="tab" data-tab="rag" aria-selected="false" aria-controls="panel-rag">RAG</button>
+  <button class="tab" type="button" role="tab" data-tab="cron" aria-selected="false" aria-controls="panel-cron">Cron</button>
+</nav>
 {% endblock %}
 
 {% block content %}
-<h1>Dashboard</h1>
-<p class="sub">Visao interna do Hermes: modelos, VM, cron, RAG e memoria.</p>
 
-{% if stats.error %}
-<div class="notice">
-  Banco de observabilidade indisponivel: <span class="mono">{{ stats.error }}</span>
-</div>
-{% endif %}
+<section class="panel" id="panel-atividade" role="tabpanel" aria-labelledby="tab-atividade">
+  <div class="panel-head">
+    <h1>Atividade</h1>
+    <p>Prompts, chamadas de modelo e tool calls do Hermes, lidos do events.db.</p>
+  </div>
 
-<div class="stat-grid">
-  <div class="stat">
-    <div class="label">Chamadas ({{ stats.month }})</div>
-    <div class="value">{{ stats.total_calls }}</div>
+  {# painel ao vivo: htmx troca este bloco sozinho, e o filtro entre colchetes
+     segura o polling enquanto a aba nao esta visivel #}
+  <div hx-get="{{ url_for('fragment_live') }}"
+       hx-trigger="load, every 3s [window.hermesActivityVisible && window.hermesActivityVisible()]"
+       hx-swap="innerHTML">
+    <div class="card live"><p class="skeleton">conectando ao log...</p></div>
   </div>
-  <div class="stat">
-    <div class="label">Custo</div>
-    <div class="value accent">${{ '%.4f'|format(stats.total_cost) }}</div>
-  </div>
-  <div class="stat">
-    <div class="label">Fallbacks</div>
-    <div class="value yellow">{{ stats.fallback_count }} <span style="font-size: 1rem">({{ stats.fallback_rate }}%)</span></div>
-  </div>
-  <div class="stat">
-    <div class="label">Modelos ativos</div>
-    <div class="value">{{ stats.models|length }}</div>
-  </div>
-</div>
 
-<div class="card">
-  <div class="panel-head"><h2>Configuracao de modelos</h2></div>
-  {% if models.error %}
-    <p class="empty">Nao consegui ler o config.yaml: <span class="mono">{{ models.error }}</span></p>
-  {% endif %}
-  <dl class="kv">
-    <dt>Primario</dt><dd class="mono">{{ models.primary }}</dd>
-  </dl>
-  {% if models.fallbacks %}
-  <table style="margin-top: 1rem">
-    <thead>
-      <tr><th>#</th><th>Provider</th><th>Modelo</th><th class="num">$/Mtok in</th><th class="num">$/Mtok out</th></tr>
-    </thead>
-    <tbody>
-    {% for fb in models.fallbacks %}
-      <tr>
-        <td class="num">{{ loop.index }}</td>
-        <td>{{ fb.provider }}</td>
-        <td class="mono">{{ fb.model }}</td>
-        <td class="num">{{ fb.cost[0] }}</td>
-        <td class="num">{{ fb.cost[1] }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <p class="empty">Nenhum fallback configurado.</p>
-  {% endif %}
-</div>
+  <div class="stat-grid" data-role="summary"></div>
 
-<div class="grid">
   <div class="card">
-    <div class="panel-head"><h2>VM</h2><span class="when" id="vm-when"></span></div>
-    <div id="vm">carregando...</div>
+    <header>
+      <h2>Calendario de atividade</h2>
+    </header>
+    <div class="controls" data-role="controls"></div>
+    <div data-role="calendar"><p class="skeleton">carregando...</p></div>
   </div>
-  <div class="card">
-    <div class="panel-head"><h2>Status</h2><span class="when" id="status-when"></span></div>
-    <div id="status">carregando...</div>
+
+  <div data-role="detail"></div>
+</section>
+
+<section class="panel" id="panel-vm" role="tabpanel" hidden>
+  <div class="panel-head">
+    <h1>VM</h1>
+    <p>CPU, memoria e disco da maquina onde o agente roda.</p>
   </div>
-</div>
+  <div data-role="vm"><p class="skeleton">carregando...</p></div>
+</section>
 
-<div class="card">
-  <div class="panel-head"><h2>Atividade recente</h2></div>
-  <div id="recent" class="scroll">carregando...</div>
-</div>
-
-<div class="grid">
-  <div class="card">
-    <div class="panel-head"><h2>Cron jobs</h2></div>
-    <div id="cron" class="scroll">carregando...</div>
+<section class="panel" id="panel-tools" role="tabpanel" hidden>
+  <div class="panel-head">
+    <h1>Tools</h1>
+    <p>Ferramentas disponiveis e estatisticas de tool calling.</p>
   </div>
-  <div class="card">
-    <div class="panel-head"><h2>Memoria e skills</h2></div>
-    <div id="memory" class="scroll">carregando...</div>
+  <div class="controls" data-role="tools-controls"></div>
+  <div data-role="tools"><p class="skeleton">carregando...</p></div>
+</section>
+
+<section class="panel" id="panel-mcps" role="tabpanel" hidden>
+  <div class="panel-head">
+    <h1>MCPs</h1>
+    <p>Servidores MCP configurados, suas acoes e o uso registrado no log.</p>
   </div>
-</div>
+  <div class="controls" data-role="mcp-controls"></div>
+  <div data-role="mcps"><p class="skeleton">carregando...</p></div>
+</section>
 
-<div class="card">
-  <div class="panel-head"><h2>RAG</h2><span class="when" id="rag-when"></span></div>
-  <form class="search" id="rag-form">
-    <input id="rag-q" name="q" placeholder="buscar nos docs indexados..." autocomplete="off">
-    <button type="submit">Buscar</button>
-  </form>
-  <div id="rag" class="scroll">carregando...</div>
-</div>
+<section class="panel" id="panel-memoria" role="tabpanel" hidden>
+  <div class="panel-head">
+    <h1>Memoria, skills e contextos</h1>
+    <p>Catalogo de documentos do agente. Toque para ler o conteudo.</p>
+  </div>
+  <div class="controls" data-role="mem-controls"></div>
+  <div data-role="memory"><p class="skeleton">carregando...</p></div>
+</section>
 
-<div class="card">
-  <div class="panel-head"><h2>Ferramentas disponiveis</h2></div>
-  <div id="tools">carregando...</div>
-</div>
+<section class="panel" id="panel-rag" role="tabpanel" hidden>
+  <div class="panel-head">
+    <h1>RAG</h1>
+    <p>Base vetorial em <span class="mono">{{ paths.rag }}</span></p>
+  </div>
+
+  <div class="controls" data-role="rag-views">
+    <div class="seg" role="group" aria-label="Visao do RAG">
+      <button type="button" data-rag-view="mapa" aria-pressed="true">Mapa mental</button>
+      <button type="button" data-rag-view="lista" aria-pressed="false">Lista</button>
+      <button type="button" data-rag-view="busca" aria-pressed="false">Busca semantica</button>
+    </div>
+  </div>
+
+  <div data-view="mapa">
+    <div class="graph-shell">
+      <div class="graph" data-role="rag-graph"></div>
+      <div class="graph-toolbar">
+        <button type="button" data-graph-action="in" aria-label="Aproximar">+</button>
+        <button type="button" data-graph-action="out" aria-label="Afastar">&minus;</button>
+        <button type="button" data-graph-action="fit" aria-label="Enquadrar">⤢</button>
+      </div>
+      <div class="graph-legend">
+        <span><i style="background:#3987e5"></i>raiz</span>
+        <span><i style="background:#d95926"></i>repositorio</span>
+        <span><i style="background:#199e70"></i>categoria</span>
+        <span><i style="background:#c98500"></i>documento</span>
+      </div>
+    </div>
+    <div data-role="rag-graph-info"></div>
+  </div>
+
+  <div data-view="lista" hidden>
+    <div data-role="rag-list"><p class="skeleton">carregando...</p></div>
+  </div>
+
+  <div data-view="busca" hidden>
+    <form class="controls" data-role="rag-search-form">
+      <div style="flex: 1 1 240px; min-width: 0">
+        <input type="search" data-role="rag-search-input" placeholder="ex: como configurar fallback de modelo"
+               aria-label="Buscar no RAG">
+      </div>
+      <button class="btn" type="submit">Buscar</button>
+    </form>
+    <div class="graph-shell" data-role="rag-search-graph" hidden>
+      <div class="graph" data-role="rag-search-canvas"></div>
+      <div class="graph-toolbar">
+        <button type="button" data-graph-action="in" data-graph-target="search" aria-label="Aproximar">+</button>
+        <button type="button" data-graph-action="out" data-graph-target="search" aria-label="Afastar">&minus;</button>
+        <button type="button" data-graph-action="fit" data-graph-target="search" aria-label="Enquadrar">⤢</button>
+      </div>
+    </div>
+    <div data-role="rag-search-result"><p class="empty">busque um termo para ver o mapa dos vetores mais proximos</p></div>
+  </div>
+</section>
+
+<section class="panel" id="panel-cron" role="tabpanel" hidden>
+  <div class="panel-head">
+    <h1>Cron jobs</h1>
+    <p>Agendamentos do Hermes, do crontab e dos timers do systemd na VM.</p>
+  </div>
+  <div data-role="cron"><p class="skeleton">carregando...</p></div>
+</section>
+
 {% endblock %}
 
 {% block scripts %}
-<script>
-// Os endpoints /api/* devolvem JSON, entao cada painel busca e renderiza sozinho.
-const $ = (id) => document.getElementById(id);
-
-function esc(v) {
-  return String(v === null || v === undefined ? "" : v)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-function bytes(n) {
-  const u = ["B", "KB", "MB", "GB", "TB"];
-  let i = 0, v = Number(n) || 0;
-  while (v >= 1024 && i < u.length - 1) { v /= 1024; i += 1; }
-  return v.toFixed(i ? 1 : 0) + " " + u[i];
-}
-function duration(sec) {
-  const s = Math.floor(Number(sec) || 0);
-  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
-  return (d ? d + "d " : "") + h + "h " + m + "min";
-}
-function clock(iso) {
-  if (!iso) return "";
-  const t = new Date(iso);
-  return isNaN(t) ? String(iso) : t.toLocaleTimeString("pt-BR");
-}
-function meter(pct, hot) {
-  const p = Math.max(0, Math.min(100, Number(pct) || 0));
-  return '<div class="meter' + (hot ? " hot" : "") + '"><span style="width:' + p.toFixed(1) + '%"></span></div>';
-}
-function empty(msg) { return '<p class="empty">' + esc(msg) + "</p>"; }
-
-async function load(url, target, render) {
-  try {
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const data = await res.json();
-    target.innerHTML = data.error ? empty(data.error) : render(data);
-  } catch (err) {
-    target.innerHTML = empty("falhou: " + err.message);
-  }
-}
-
-function renderVm(d) {
-  const mem = d.memory, disk = d.disk, cpu = d.cpu_usage, la = d.load_avg;
-  const memPct = mem ? (mem.total - mem.available) / mem.total * 100 : 0;
-  const diskPct = disk ? parseFloat(disk.use_percent) : 0;
-  const parts = [];
-  if (cpu) {
-    parts.push("<dt>CPU</dt><dd>" + (100 - cpu.idle).toFixed(1) + "% usado"
-      + meter(100 - cpu.idle, 100 - cpu.idle > 80) + "</dd>");
-  }
-  if (la) parts.push("<dt>Load</dt><dd>" + la["1min"] + " / " + la["5min"] + " / " + la["15min"] + "</dd>");
-  if (mem) {
-    parts.push("<dt>Memoria</dt><dd>" + bytes(mem.total - mem.available) + " de " + bytes(mem.total)
-      + meter(memPct, memPct > 85) + "</dd>");
-  }
-  if (disk) {
-    parts.push("<dt>Disco</dt><dd>" + disk.used + " de " + disk.size + " (" + disk.use_percent + ")"
-      + meter(diskPct, diskPct > 85) + "</dd>");
-  }
-  $("vm-when").textContent = clock(d.timestamp);
-  if (!parts.length) return empty("sem metricas da VM");
-  const top = (d.top_cpu || []).slice(0, 5).map((p) =>
-    "<tr><td class='mono'>" + esc(p.command) + "</td><td class='num'>" + esc(p.cpu)
-    + "%</td><td class='num'>" + esc(p.mem) + "%</td></tr>").join("");
-  return '<dl class="kv">' + parts.join("") + "</dl>"
-    + (top ? "<table style='margin-top:1rem'><thead><tr><th>Processo</th><th class='num'>CPU</th>"
-      + "<th class='num'>MEM</th></tr></thead><tbody>" + top + "</tbody></table>" : "");
-}
-
-function renderStatus(d) {
-  $("status-when").textContent = clock(d.timestamp);
-  const rows = [];
-  rows.push("<dt>Uptime</dt><dd>" + duration(d.uptime_seconds) + "</dd>");
-  rows.push("<dt>Indexer</dt><dd>" + (d.indexer_running
-    ? "<span class='pill ok'>rodando</span>" : "<span class='pill'>parado</span>") + "</dd>");
-  rows.push("<dt>Tool calls</dt><dd>" + (d.recent_tools || []).length + " recentes</dd>");
-  rows.push("<dt>Model calls</dt><dd>" + (d.recent_models || []).length + " recentes</dd>");
-  return '<dl class="kv">' + rows.join("") + "</dl>";
-}
-
-function renderRecent(d) {
-  const tools = (d.tools || []).map((t) => ({
-    when: t.timestamp, kind: "tool", name: t.tool_name,
-    detail: (t.duration_ms || 0) + "ms", ok: t.success, err: t.error,
-  }));
-  const models = (d.models || []).map((m) => ({
-    when: m.timestamp, kind: "model", name: m.model,
-    detail: (m.input_tokens || 0) + " in / " + (m.output_tokens || 0) + " out / "
-      + (m.latency_ms || 0) + "ms", ok: 1, err: m.fallback_reason,
-  }));
-  const all = tools.concat(models)
-    .sort((a, b) => String(b.when).localeCompare(String(a.when))).slice(0, 40);
-  if (!all.length) return empty("nada registrado ainda");
-  const body = all.map((e) =>
-    "<tr><td class='mono'>" + clock(e.when) + "</td>"
-    + "<td><span class='pill'>" + e.kind + "</span></td>"
-    + "<td class='mono'>" + esc(e.name) + "</td>"
-    + "<td>" + esc(e.detail) + "</td>"
-    + "<td>" + (e.err ? "<span class='pill err'>" + esc(e.err) + "</span>"
-      : (e.ok ? "<span class='pill ok'>ok</span>" : "<span class='pill err'>falhou</span>")) + "</td></tr>"
-  ).join("");
-  return "<table><thead><tr><th>Hora</th><th>Tipo</th><th>Nome</th><th>Detalhe</th>"
-    + "<th>Status</th></tr></thead><tbody>" + body + "</tbody></table>";
-}
-
-function renderCron(d) {
-  const jobs = d.jobs || [], execs = d.recent_executions || [];
-  if (!jobs.length && !execs.length) return empty("nenhum cron job configurado");
-  const jobRows = jobs.map((j) =>
-    "<tr><td class='mono'>" + esc(j.id || j.name || "?") + "</td>"
-    + "<td class='mono'>" + esc(j.schedule || j.cron || "?") + "</td>"
-    + "<td>" + (j.enabled === false ? "<span class='pill'>off</span>"
-      : "<span class='pill ok'>on</span>") + "</td></tr>").join("");
-  const execRows = execs.slice(0, 10).map((e) =>
-    "<tr><td class='mono'>" + esc(e.job_id) + "</td><td class='mono'>" + clock(e.start_time) + "</td>"
-    + "<td>" + (e.exit_code === 0 ? "<span class='pill ok'>0</span>"
-      : "<span class='pill err'>" + esc(e.exit_code) + "</span>") + "</td></tr>").join("");
-  return (jobRows ? "<table><thead><tr><th>Job</th><th>Schedule</th><th>Ativo</th></tr></thead>"
-      + "<tbody>" + jobRows + "</tbody></table>" : "")
-    + (execRows ? "<h2 style='margin:1rem 0 0.5rem'>Ultimas execucoes</h2><table><thead><tr>"
-      + "<th>Job</th><th>Inicio</th><th>Exit</th></tr></thead><tbody>"
-      + execRows + "</tbody></table>" : "");
-}
-
-function renderMemory(d) {
-  const files = d.memory_files || [], skills = d.skills || [];
-  if (!files.length && !skills.length) return empty("nenhum arquivo de memoria encontrado");
-  const fileRows = files.map((f) =>
-    "<tr><td class='mono'>" + esc(f.name) + "</td><td class='num'>" + f.lines
-    + "</td><td class='num'>" + bytes(f.size) + "</td></tr>").join("");
-  const pills = skills.map((s) =>
-    "<span class='pill' title='" + esc(s.category) + "'>" + esc(s.name) + "</span>").join("");
-  return (fileRows ? "<table><thead><tr><th>Arquivo</th><th class='num'>Linhas</th>"
-      + "<th class='num'>Tamanho</th></tr></thead><tbody>" + fileRows + "</tbody></table>" : "")
-    + "<p class='sub' style='margin:1rem 0 0.5rem'>" + skills.length + " skills &middot; "
-    + bytes(d.total_chars) + " de contexto</p>"
-    + (pills ? "<div class='tags'>" + pills + "</div>" : "");
-}
-
-function renderRagList(d) {
-  $("rag-when").textContent = d.total + " docs";
-  const repos = Object.entries(d.by_repo || {});
-  if (!repos.length) return empty("RAG vazio ou nao configurado");
-  const rows = repos.sort((a, b) => b[1].count - a[1].count).map(([repo, v]) =>
-    "<tr><td class='mono'>" + esc(repo) + "</td><td class='num'>" + v.count
-    + "</td><td class='num'>" + v.issues + "</td><td class='num'>" + v.readmes
-    + "</td></tr>").join("");
-  return "<table><thead><tr><th>Repo</th><th class='num'>Docs</th><th class='num'>Issues</th>"
-    + "<th class='num'>Readmes</th></tr></thead><tbody>" + rows + "</tbody></table>";
-}
-
-function renderRagSearch(d) {
-  const hits = d.results || [];
-  if (!hits.length) return empty("nenhum resultado para " + d.query);
-  if (hits[0].error) return empty(hits[0].error);
-  return hits.map((r) =>
-    "<div class='result'><div><a href='" + esc(r.url) + "' target='_blank' rel='noopener'>"
-    + esc(r.title || r.id) + "</a></div><div class='meta'>" + esc(r.repo) + " &middot; "
-    + esc(r.type) + " " + esc(r.state) + "</div><div>" + esc((r.preview || "").slice(0, 240))
-    + "</div></div>").join("");
-}
-
-function renderTools(d) {
-  const core = (d.core_tools || []).map((t) => "<span class='pill'>" + esc(t) + "</span>").join("");
-  const mcp = (d.github_mcp_tools || []).map((t) => "<span class='pill'>" + esc(t) + "</span>").join("");
-  return "<div class='tags'>" + core + "</div>"
-    + "<p class='sub' style='margin:1rem 0 0.5rem'>MCP</p><div class='tags'>" + mcp + "</div>";
-}
-
-function refresh() {
-  load("/api/vmstats", $("vm"), renderVm);
-  load("/api/status", $("status"), renderStatus);
-  load("/api/recent?limit=25", $("recent"), renderRecent);
-}
-
-refresh();
-setInterval(refresh, 15000);
-load("/api/cronjobs", $("cron"), renderCron);
-load("/api/memory", $("memory"), renderMemory);
-load("/api/rag/list", $("rag"), renderRagList);
-load("/api/tools", $("tools"), renderTools);
-
-$("rag-form").addEventListener("submit", (ev) => {
-  ev.preventDefault();
-  const q = $("rag-q").value.trim();
-  const target = $("rag");
-  if (!q) { load("/api/rag/list", target, renderRagList); return; }
-  target.innerHTML = "buscando...";
-  load("/api/rag/search?q=" + encodeURIComponent(q), target, renderRagSearch);
-});
-</script>
+<script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
 {% endblock %}
