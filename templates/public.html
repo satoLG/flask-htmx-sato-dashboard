@@ -1,14 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Hermes - Estatisticas publicas{% endblock %}
+{% block subtitle %}Estatisticas publicas{% endblock %}
+
+{% block actions %}
+<a href="{{ url_for('dashboard') }}">Dashboard</a>
+{% endblock %}
 
 {% block content %}
-<h1>Estatisticas publicas</h1>
-<p class="sub">Uso de modelos e ferramentas do agente Hermes em {{ stats.month }}.</p>
+<div class="panel-head">
+  <h1>Estatisticas publicas</h1>
+  <p>Uso de modelos e ferramentas do agente Hermes em {{ stats.month }}.</p>
+</div>
 
 {% if stats.error %}
-<div class="notice">
-  Sem dados ainda: <span class="mono">{{ stats.error }}</span>
-</div>
+<div class="notice">Sem dados ainda: <span class="mono">{{ stats.error }}</span></div>
 {% endif %}
 
 <div class="stat-grid">
@@ -18,94 +23,83 @@
   </div>
   <div class="stat">
     <div class="label">Custo no mes</div>
-    <div class="value accent">${{ '%.4f'|format(stats.total_cost) }}</div>
+    <div class="value">${{ '%.4f'|format(stats.total_cost) }}</div>
   </div>
   <div class="stat">
     <div class="label">Fallbacks</div>
-    <div class="value yellow">{{ stats.fallback_count }}</div>
+    <div class="value">{{ stats.fallback_count }}</div>
   </div>
   <div class="stat">
     <div class="label">Taxa de fallback</div>
-    <div class="value yellow">{{ stats.fallback_rate }}%</div>
+    <div class="value">{{ stats.fallback_rate }}%</div>
   </div>
 </div>
 
 <div class="card">
-  <h2>Chamadas por dia (30 dias)</h2>
+  <header><h2>Chamadas por dia (30 dias)</h2></header>
   {% if stats.daily %}
     {% set peak = stats.daily|map(attribute='calls')|max %}
     {% set slot = 600 / stats.daily|length %}
-    <svg class="chart" viewBox="0 0 600 100" preserveAspectRatio="none" role="img"
+    <svg viewBox="0 0 600 110" preserveAspectRatio="none" role="img"
+         style="width: 100%; height: 120px; display: block"
          aria-label="Chamadas por dia nos ultimos 30 dias">
       {% for d in stats.daily %}
-        {% set h = (d.calls / peak * 88)|round(2) %}
-        <rect class="col" x="{{ (loop.index0 * slot)|round(2) }}" y="{{ (95 - h)|round(2) }}"
-              width="{{ (slot * 0.7)|round(2) }}" height="{{ h if h > 1 else 1 }}">
+        {% set bh = (d.calls / peak * 92)|round(2) %}
+        <rect x="{{ (loop.index0 * slot)|round(2) }}" y="{{ (100 - bh)|round(2) }}"
+              width="{{ (slot * 0.68)|round(2) }}" height="{{ bh if bh > 1 else 1 }}"
+              rx="1.5" fill="var(--s1)">
           <title>{{ d.day }}: {{ d.calls }} chamadas</title>
         </rect>
       {% endfor %}
-      <line class="axis" x1="0" y1="95.5" x2="600" y2="95.5"/>
+      <line x1="0" y1="100.5" x2="600" y2="100.5" stroke="var(--axis)" stroke-width="1"/>
     </svg>
-    <div class="sub" style="margin: 0.5rem 0 0; display: flex; justify-content: space-between;">
+    <div class="hm-legend">
       <span>{{ stats.daily[0].day }}</span>
-      <span>pico: {{ peak }}/dia</span>
-      <span>{{ stats.daily[-1].day }}</span>
+      <span style="margin-left:auto">pico {{ peak }}/dia</span>
+      <span style="margin-left:auto">{{ stats.daily[-1].day }}</span>
     </div>
   {% else %}
     <p class="empty">Nenhuma chamada registrada nos ultimos 30 dias.</p>
   {% endif %}
 </div>
 
-<div class="grid">
+<div class="grid cols-2">
   <div class="card">
-    <h2>Modelos</h2>
+    <header><h2>Modelos</h2></header>
     {% if stats.models %}
-    <table>
-      <thead>
-        <tr><th>Modelo</th><th class="num">Chamadas</th><th class="num">Custo</th><th>Share</th></tr>
-      </thead>
-      <tbody>
+      <div class="bars">
       {% for m in stats.models %}
-        <tr>
-          <td class="mono">{{ m.model }}</td>
-          <td class="num">{{ m.calls }}</td>
-          <td class="num">${{ '%.4f'|format(m.cost) }}</td>
-          <td>
-            <div class="bar-track" title="{{ m.percentage }}%">
-              <div class="bar" style="width: {{ m.percentage }}%"></div>
-            </div>
-          </td>
-        </tr>
+        <div class="bar-row">
+          <span class="k mono">{{ m.model }}</span>
+          <span class="v">{{ m.calls }} &middot; ${{ '%.4f'|format(m.cost) }}</span>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: {{ m.percentage }}%" title="{{ m.percentage }}%"></div>
+          </div>
+        </div>
       {% endfor %}
-      </tbody>
-    </table>
+      </div>
     {% else %}
-    <p class="empty">Nenhum modelo usado neste mes.</p>
+      <p class="empty">Nenhum modelo usado neste mes.</p>
     {% endif %}
   </div>
 
   <div class="card">
-    <h2>Ferramentas mais usadas</h2>
+    <header><h2>Ferramentas mais usadas</h2></header>
     {% if stats.tools %}
       {% set top = stats.tools[0].calls %}
-    <table>
-      <thead><tr><th>Ferramenta</th><th class="num">Chamadas</th><th>Uso</th></tr></thead>
-      <tbody>
+      <div class="bars">
       {% for t in stats.tools %}
-        <tr>
-          <td class="mono">{{ t.tool_name }}</td>
-          <td class="num">{{ t.calls }}</td>
-          <td>
-            <div class="bar-track">
-              <div class="bar" style="width: {{ (t.calls / top * 100)|round(1) }}%"></div>
-            </div>
-          </td>
-        </tr>
+        <div class="bar-row">
+          <span class="k mono">{{ t.tool_name }}</span>
+          <span class="v">{{ t.calls }}</span>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: {{ (t.calls / top * 100)|round(1) }}%"></div>
+          </div>
+        </div>
       {% endfor %}
-      </tbody>
-    </table>
+      </div>
     {% else %}
-    <p class="empty">Nenhuma ferramenta chamada neste mes.</p>
+      <p class="empty">Nenhuma ferramenta chamada neste mes.</p>
     {% endif %}
   </div>
 </div>
