@@ -16,7 +16,7 @@ export function init(root) {
 
 function renderControls() {
   const periods = [[7, "7 dias"], [30, "30 dias"], [90, "90 dias"]];
-  render(refs.controls,
+  refs.controls,
     h("div", { class: "seg", role: "group", "aria-label": "Periodo" },
       periods.map(([value, label]) => h("button", {
         type: "button",
@@ -90,7 +90,6 @@ function serverCard(s) {
           { key: "action", label: "Acao" },
           { key: "calls", label: "Calls", num: true, render: (r) => fmt.num(r.calls) },
           { key: "failures", label: "Falhas", num: true, render: (r) => fmt.num(r.failures) },
-          { key: "avg_ms", label: "Media", num: true, render: (r) => fmt.ms(r.avg_ms) },
           { key: "last", label: "Ultimo uso", render: (r) => (r.last ? fmt.relative(r.last) : "nunca") },
         ], s.actions)
       : empty("nenhuma acao registrada"),
