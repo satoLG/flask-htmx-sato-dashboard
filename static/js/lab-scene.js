@@ -13,6 +13,7 @@ export function createLabScene(container, callbacks) {
   const renderer = new T.WebGLRenderer({antialias: true, alpha: false, powerPreference: 'high-performance'});
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
   renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.3;
   container.append(renderer.domElement);
   const world = new T.Scene(); world.background = new T.Color('#c4d2cc');
@@ -21,6 +22,7 @@ export function createLabScene(container, callbacks) {
   const aim = new T.Vector3(0, .7, 0), target = aim.clone();
   let azimuth = .48, elevation = .7, radius = 46, targetRadius = 46, paused = false, stale = false;
   let selected = null, latestData = null, walkingTarget = null, lastTime = 0, animationTime = 0, lastPosition = 0;
+  let dirty = true, wasMoving = false, lastShadow = 0, previousAzimuth = azimuth, previousElevation = elevation;
   const keys = new Set(), robots = new Map(), zones = new Map(), hitObjects = [], obstacles = [];
   const mats = new Map(), geometries = new Map();
   const mat = (color, metalness = .1, roughness = .65) => {
@@ -68,7 +70,7 @@ export function createLabScene(container, callbacks) {
   }
   world.add(new T.HemisphereLight('#e9fff4', '#617670', 2.9));
   const sunlight = new T.DirectionalLight('#fff1d7', 4.3); sunlight.position.set(-12, 25, 10); sunlight.castShadow = true;
-  sunlight.shadow.mapSize.set(2048, 2048); Object.assign(sunlight.shadow.camera, {left: -27, right: 27, top: 24, bottom: -24, far: 70});
+  sunlight.shadow.mapSize.set(1024, 1024); Object.assign(sunlight.shadow.camera, {left: -27, right: 27, top: 24, bottom: -24, far: 70});
   sunlight.shadow.normalBias = .045; sunlight.shadow.bias = -.0001; world.add(sunlight);
   const fill = new T.DirectionalLight('#a3e9f0', 1.4); fill.position.set(13, 9, -10); world.add(fill);
 
@@ -303,7 +305,7 @@ export function createLabScene(container, callbacks) {
   });
   for (const type of ['pointercancel', 'lostpointercapture']) container.addEventListener(type, () => drag = null);
   container.addEventListener('wheel', event => { event.preventDefault(); targetRadius = T.MathUtils.clamp(targetRadius + Math.sign(event.deltaY) * 2, 12, 70); }, {passive: false});
-  function clearKeys() { keys.clear(); }
+  function clearKeys() { keys.clear(); walkingTarget = null; dirty = true; }
   function interact() {
     let closest = null, distance = 4;
     for (const item of robots.values()) { const d = avatar.position.distanceTo(item.root.position); if (d < distance) { closest = item; distance = d; } }
@@ -318,7 +320,7 @@ export function createLabScene(container, callbacks) {
   function canStand(x, z) { return x > -16.8 && x < 16.8 && z > -11.4 && z < 11.7 && !obstacles.some(o => Math.abs(x - o.x) < o.w / 2 + .28 && Math.abs(z - o.z) < o.d / 2 + .28); }
 
   function update(data) {
-    stale = false; latestData = data;
+    stale = false; latestData = data; dirty = true; renderer.shadowMap.needsUpdate = true;
     // Up to 8 per sector on the floor. Selecting any roster member brings it
     // into the scene, including workers beyond the visual capacity.
     const visible = [];
@@ -351,7 +353,7 @@ export function createLabScene(container, callbacks) {
   }
   function focusSector(id) { const z = ZONES[id]; target.set(z.x * .65, .8, z.z * .65); targetRadius = Math.max(24, 30 / Math.min(camera.aspect, 1.3)); }
   function setStale(value) {
-    stale = value;
+    stale = value; dirty = true;
     if (value) {
       for (const item of robots.values()) item.iris.material = glow('#82988a');
       for (const zone of zones.values()) zone.trim.material = mat('#8ba498');
@@ -365,14 +367,19 @@ export function createLabScene(container, callbacks) {
   }
   function reset() { target.set(0, .7, 0); targetRadius = camera.aspect < 1 ? 60 : 46; azimuth = .48; elevation = .7; }
   const projected = new T.Vector3();
-  function resize() { const {width, height} = container.getBoundingClientRect(); renderer.setSize(width, height, false); camera.aspect = width / height; camera.updateProjectionMatrix(); if (width < 500 && targetRadius === 46) targetRadius = 60; }
+  function resize() { const {width, height} = container.getBoundingClientRect(); renderer.setSize(width, height, false); camera.aspect = width / height; camera.updateProjectionMatrix(); if (width < 500 && targetRadius === 46) targetRadius = 60; dirty = true; }
   new ResizeObserver(resize).observe(container); resize();
   const direction = new T.Vector3();
   function frame(ms) {
     requestAnimationFrame(frame);
+    // Cap motion at 30fps and render still scenes only after an input or sample.
+    // Software WebGL otherwise spends every frame redrawing hundreds of shadows.
+    if (ms - lastTime < 1000 / 30) return;
     const dt = Math.min((ms - lastTime) / 1000, .05); lastTime = ms;
     if (document.hidden) return;
     if (!paused) animationTime += dt;
+    const cameraChanging = aim.distanceToSquared(target) > .00001 || Math.abs(radius - targetRadius) > .001 || azimuth !== previousAzimuth || elevation !== previousElevation;
+    previousAzimuth = azimuth; previousElevation = elevation;
     aim.lerp(target, 1 - Math.exp(-dt * 6)); radius = T.MathUtils.lerp(radius, targetRadius, 1 - Math.exp(-dt * 6));
     camera.position.set(aim.x + Math.sin(azimuth) * Math.cos(elevation) * radius, aim.y + Math.sin(elevation) * radius, aim.z + Math.cos(azimuth) * Math.cos(elevation) * radius); camera.lookAt(aim);
     let x = 0, z = 0;
@@ -383,6 +390,9 @@ export function createLabScene(container, callbacks) {
     direction.set(x * Math.cos(azimuth) + z * Math.sin(azimuth), 0, z * Math.cos(azimuth) - x * Math.sin(azimuth));
     if (walkingTarget && !keys.size) { direction.subVectors(walkingTarget, avatar.position); direction.y = 0; if (direction.length() < .2) { walkingTarget = null; direction.set(0, 0, 0); } }
     const moving = direction.lengthSq() > .01;
+    const animating = !paused && !stale && [...robots.values()].some(item => LIVE.has(item.worker.status));
+    if (!dirty && !moving && !wasMoving && !cameraChanging && !animating) return;
+    dirty = false; wasMoving = moving;
     if (moving) {
       direction.normalize(); const nx = avatar.position.x + direction.x * dt * 4, nz = avatar.position.z + direction.z * dt * 4;
       let moved = false;
@@ -411,14 +421,15 @@ export function createLabScene(container, callbacks) {
       label.style.visibility = projected.z > 1 || Math.abs(projected.x) > 1.05 || Math.abs(projected.y) > 1.05 ? 'hidden' : 'visible';
     }
     if (ms - lastPosition > 200) { callbacks.onPosition(avatar.position.x, avatar.position.z); lastPosition = ms; }
+    if (moving && ms - lastShadow > 500) { renderer.shadowMap.needsUpdate = true; lastShadow = ms; }
     renderer.render(world, camera);
   }
   requestAnimationFrame(frame);
   renderer.domElement.addEventListener('webglcontextlost', event => { event.preventDefault(); document.getElementById('scene-fallback').hidden = false; document.getElementById('scene-labels').hidden = true; });
-  renderer.domElement.addEventListener('webglcontextrestored', () => { document.getElementById('scene-fallback').hidden = true; document.getElementById('scene-labels').hidden = false; });
+  renderer.domElement.addEventListener('webglcontextrestored', () => { dirty = true; renderer.shadowMap.needsUpdate = true; document.getElementById('scene-fallback').hidden = true; document.getElementById('scene-labels').hidden = false; });
   return {update, focusSector, selectRobot, reset, clearKeys, interact,
     zoom(delta) { targetRadius = T.MathUtils.clamp(targetRadius + delta * 4, 12, 70); },
-    setPaused(value) { paused = value; }, setKey(key, value) { if (value) { keys.add(key); walkingTarget = null; } else keys.delete(key); },
+    setPaused(value) { paused = value; dirty = true; }, setKey(key, value) { if (value) { keys.add(key); walkingTarget = null; } else keys.delete(key); dirty = true; },
     setStale,
   };
 }
