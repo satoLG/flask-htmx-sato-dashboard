@@ -8,7 +8,7 @@ import traceback
 
 from flask import Flask, jsonify, render_template, request
 
-from hermes_dashboard import activity, cron, mcp, memory, rag, stats, tools, vm
+from hermes_dashboard import activity, cron, lab, mcp, memory, rag, stats, tools, vm
 from hermes_dashboard import db
 from hermes_dashboard import config
 
@@ -79,6 +79,29 @@ def dashboard():
 
 
 # --- aba: atividade ---
+
+@app.route("/lab")
+def laboratory():
+    return render_template("lab.html")
+
+
+@app.route("/api/lab/state")
+def api_lab_state():
+    return jsonify(lab.snapshot())
+
+
+@app.post("/api/lab/chat")
+def api_lab_chat():
+    if request.content_length and request.content_length > 4096:
+        return jsonify({"error": "mensagem muito grande"}), 413
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "envie robot_id e question em JSON"}), 400
+    robot_id, question = data.get("robot_id"), data.get("question")
+    if not isinstance(robot_id, str) or not isinstance(question, str) or not question.strip() or len(question) > 500 or len(robot_id) > 100:
+        return jsonify({"error": "robô e pergunta obrigatórios; máximo de 500 caracteres"}), 400
+    response = lab.answer(robot_id, question.strip())
+    return (jsonify(response), 200) if response else (jsonify({"error": "Este robô não está mais no snapshot. Atualize o laboratório."}), 404)
 
 @app.route("/api/activity/heatmap")
 def api_heatmap():

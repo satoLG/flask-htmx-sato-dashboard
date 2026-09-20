@@ -81,6 +81,8 @@ def client(vm):
 ROUTES = [
     "/",
     "/dashboard",
+    "/lab",
+    "/api/lab/state",
     "/api/stats",
     "/api/activity/heatmap?days=365",
     "/api/activity/heatmap?days=90&kinds=tool",

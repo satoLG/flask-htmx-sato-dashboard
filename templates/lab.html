@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#102e32">
+  <title>Laboratório 3D · Sato Agents</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/lab.css') }}">
+</head>
+<body>
+  <header class="lab-header">
+    <a class="lab-brand" href="/" aria-label="Sato Agents, início"><span class="brand-mark">s<span>•</span></span><span>SATO <b>AGENTS</b><small>OBSERVABILITY LAB</small></span></a>
+    <nav aria-label="Navegação principal"><a href="/dashboard">Dashboard</a><a href="/lab" aria-current="page">Laboratório <span>3D</span></a></nav>
+    <div class="connection" id="connection" role="status"><i></i><span>Conectando</span></div>
+  </header>
+  <main class="lab-layout">
+    <aside class="lab-sidebar" aria-label="Setores do laboratório">
+      <div class="sidebar-heading"><span class="eyebrow">SEU AGENTE, POR DENTRO</span><h1>Laboratório<span>Hermes.</span></h1><p>Uma nova perspectiva sobre<br>o que acontece na sua VM.</p></div>
+      <div class="section-caption"><span>MAPA DE SETORES</span><span>01 — 07</span></div>
+      <nav id="sectors" class="sector-list" aria-label="Ir para um setor"></nav>
+      <div class="sidebar-bottom"><div class="tiny-orbit">◎</div><p><strong>Uma máquina. Muitos papéis.</strong><br>As conexões mostram a arquitetura.<br>Os estados vêm da telemetria.</p><a href="/dashboard">Abrir dashboard completo <span>↗</span></a></div>
+    </aside>
+    <section class="lab-main" aria-label="Explorar laboratório">
+      <div class="scene-heading"><div><span class="eyebrow">INSTALAÇÃO 01 / HERMES</span><h2>Bem-vindo ao seu laboratório<span class="accent">.</span></h2></div><button type="button" class="outline-button" id="help-toggle" aria-expanded="false" aria-controls="help-panel">? <span>Como explorar</span></button></div>
+      <div class="scene-wrap" id="scene-wrap">
+        <div id="scene" tabindex="0" aria-label="Laboratório 3D. WASD ou setas para andar. E para conversar. Arraste para girar e use a roda para zoom."></div>
+        <div id="scene-labels" aria-label="Estações no cenário"></div>
+        <div class="scene-top"><span class="scene-badge"><i></i>VISÃO DO LABORATÓRIO</span><span class="scene-stamp">SATO / RESEARCH FACILITY</span></div>
+        <div class="view-controls" aria-label="Controles da câmera"><button id="zoom-in" type="button" aria-label="Aproximar">+</button><button id="zoom-out" type="button" aria-label="Afastar">−</button><button id="reset-view" type="button" aria-label="Visão geral">⤢</button><button id="motion-toggle" type="button" aria-label="Pausar animações" aria-pressed="false">Ⅱ</button></div>
+        <div class="welcome-note" id="welcome-note"><span>OLÁ, EXPLORADOR</span><strong>O seu trabalho ganhou um lugar.</strong><p>Visite um setor ou toque em um robô para conversar.</p><button id="start-explore" type="button">Explorar o núcleo <span>↗</span></button></div>
+        <div id="scene-fallback" class="scene-fallback" hidden><strong>O modo 3D está indisponível.</strong><p>Seu navegador precisa de WebGL 2. Os setores, a telemetria e as conversas continuam disponíveis abaixo.</p></div>
+        <div id="loading" class="scene-loading">Preparando a instalação <span>•••</span></div>
+        <div class="scene-bottom"><div class="avatar-chip"><span class="avatar-face">●</span><div><strong>Você</strong><small>EXPLORADOR</small></div></div><div class="key-hints"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>mover</span><kbd>E</kbd><span>conversar</span></div><span class="coordinate" id="coordinates">X −3.0 · Z 6.0</span></div>
+        <div class="touch-controls" aria-label="Mover personagem"><button type="button" data-move="ArrowUp" aria-label="Andar para frente">↑</button><div><button type="button" data-move="ArrowLeft" aria-label="Andar para esquerda">←</button><button type="button" id="interact" aria-label="Conversar com robô próximo">E</button><button type="button" data-move="ArrowRight" aria-label="Andar para direita">→</button></div><button type="button" data-move="ArrowDown" aria-label="Andar para trás">↓</button></div>
+        <div id="help-panel" class="help-panel" hidden><strong>Explore no seu ritmo.</strong><p>Clique no chão para caminhar. Clique em um robô para conversar. Use WASD ou setas para andar e E perto de um robô.</p><p>Arraste o cenário para girar; use a roda ou + / − para aproximar. Os setores à esquerda também movem a câmera.</p><p>Ciano: atividade recente. Verde: execução registrada. Cinza: sem confirmação. Robôs de setor são guias, não processos.</p></div>
+      </div>
+      <div class="telemetry-strip" aria-label="Resumo da telemetria"><div><span class="metric-icon">⌁</span><p>Processos detectados<strong id="metric-processes">—</strong></p></div><div><span class="metric-icon">↗</span><p>Eventos / 3 min<strong id="metric-events">—</strong></p></div><div><span class="metric-icon">▤</span><p>CPU da VM<strong id="metric-cpu">—</strong></p></div><div><span class="metric-icon">◫</span><p>Memória RAM<strong id="metric-memory">—</strong></p></div><div class="sync-note"><i></i><span id="sync-note">Aguardando primeira leitura</span></div></div>
+      <div class="below-scene"><div class="activity-panel"><div class="section-caption"><span>TELEMETRIA RECENTE</span><span id="event-count">—</span></div><div id="events" class="event-list"><p class="empty">Aguardando dados da VM…</p></div></div><div class="roster-panel"><div class="section-caption"><span id="roster-title">ROBÔS DO NÚCLEO</span><span id="roster-count">—</span></div><div id="roster" class="roster"></div></div></div>
+      <details class="source-notes" id="source-notes"><summary id="source-summary">Fontes e disponibilidade</summary><ul id="warnings"></ul><p>Atualização de atividade a cada 5 s; catálogos a cada 30 s. Um evento recente é histórico, não prova de execução atual. As linhas no piso representam conexões conceituais. Até 8 robôs por setor aparecem no cenário; selecione qualquer outro pela lista para trazê-lo à cena.</p></details>
+    </section>
+  </main>
+  <aside id="chat" class="robot-chat" aria-label="Conversa com robô" hidden>
+    <div class="chat-header"><span class="robot-icon">◉</span><div><span class="eyebrow" id="chat-sector">NÚCLEO HERMES</span><h2 id="chat-name">H-01</h2></div><button type="button" id="chat-close" aria-label="Fechar conversa">×</button></div>
+    <div class="chat-identity"><span id="chat-status"></span><small id="chat-kind"></small></div>
+    <div class="chat-messages" id="chat-messages" role="log" aria-live="polite" aria-relevant="additions"></div>
+    <div class="chat-suggestions"><button type="button" data-question="O que você está fazendo agora?">O que está fazendo?</button><button type="button" data-question="O que você representa?">Qual é sua função?</button><button type="button" data-question="Quais dados você tem?">Ver dados</button><button type="button" data-question="Há alguma falha?">Ver falhas</button></div>
+    <form id="chat-form"><label class="sr-only" for="chat-input">Pergunte ao robô</label><input id="chat-input" maxlength="500" autocomplete="off" placeholder="Pergunte sobre este robô…" required><button type="submit" aria-label="Enviar pergunta">↑</button></form>
+    <p class="chat-footnote">Conversa local baseada em telemetria. Sem LLM ou execução de comandos.</p>
+  </aside>
+  <noscript><p class="noscript">Ative JavaScript para explorar o laboratório. <a href="/dashboard">Abrir dashboard</a>.</p></noscript>
+  <script type="module" src="{{ url_for('static', filename='js/lab.js') }}"></script>
+</body>
+</html>
