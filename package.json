@@ -1,0 +1,13 @@
+{
+  "name": "sato-agents-lab-devtools",
+  "private": true,
+  "scripts": {
+    "test:browser": "playwright test",
+    "build:three": "esbuild node_modules/three/build/three.module.js --bundle --minify --format=esm --outfile=static/vendor/three.module.min.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "esbuild": "0.28.2",
+    "three": "0.180.0"
+  }
+}

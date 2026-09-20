@@ -267,7 +267,7 @@ def live_snapshot(window_seconds=180):
             expr = time_expr(table, ts)
             rows = db.query(
                 f"SELECT *, {expr} AS _iso_ts FROM {db._ident(table)} "
-                f"WHERE {expr} >= ? ORDER BY {ts} DESC LIMIT 15",
+                f"WHERE datetime({expr}) >= datetime(?) ORDER BY {expr} DESC LIMIT 15",
                 (cutoff,),
             )
             recent += [_normalize(kind, r, "_iso_ts") for r in rows]

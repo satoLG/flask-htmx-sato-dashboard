@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 ROUTES = [
-    "/", "/dashboard", "/api/stats",
+    "/", "/dashboard", "/lab", "/api/lab/state", "/api/stats",
     "/api/activity/heatmap?days=365", "/api/activity/day/2026-01-01",
     "/api/live", "/fragments/live",
     "/api/vmstats", "/api/tools", "/api/mcps", "/api/memory",

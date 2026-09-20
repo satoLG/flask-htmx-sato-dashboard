@@ -12,6 +12,71 @@ python3 app.py                 # http://127.0.0.1:8080
 
 Abra `/dashboard`.
 
+## Laboratório 3D
+
+Abra `/lab` pelo link **Laboratório 3D** no dashboard ou na página inicial.
+É uma segunda visualização do mesmo host e das mesmas fontes do Hermes: não
+precisa de outro serviço, Node.js em produção ou conexão com CDN. Three.js
+0.180.0 e sua licença MIT estão em `static/vendor/`; o cenário e os personagens
+são modelos procedurais originais, sem arquivos extraídos dos jogos de referência.
+
+- Setores: núcleo Hermes (agentes, subagentes e tools), providers, MCP, RAG,
+  memória/skills, cron e infraestrutura. As linhas do piso representam a
+  arquitetura conceitual, não tráfego de rede capturado.
+- WASD/setas ou clique no piso para andar; E perto de um robô para conversar.
+  Arraste para girar, use a roda/+/- para zoom. No celular há controles de toque.
+  A lista de setores e de robôs também funciona sem WebGL 2.
+- Guias explicam cada setor. Robôs individuais representam processos detectados,
+  registros em `agent_runs`/`subagent_runs`, servidores MCP e jobs. O laboratório
+  lê até 48 registros por tabela de agentes. Mostra até oito robôs por setor no
+  3D; selecionar um robô na lista o traz para a cena. A lista contém todos os
+  robôs incluídos no snapshot.
+- Dados ausentes aparecem como **sem telemetria**, nunca como uma execução
+  fictícia. **Atividade recente** significa um evento nos últimos 180 segundos;
+  **processo detectado** não confirma trabalho. Registros `running` sem um
+  timestamp recente aparecem como **último estado sem confirmação**. Identidade
+  e parentesco vêm de `id`/`run_id`/`agent_id` e `parent_id`/`parent_run_id`.
+- A conversa responde em português sobre função, tarefa registrada, dados e
+  falhas, com fonte e horário. É um intérprete local de perguntas de telemetria,
+  **não uma sessão com o LLM/Hermes**. Não envia prompts aos providers, executa
+  comandos, altera jobs ou acessa chaves. Perguntas fora desse escopo recebem
+  uma explicação da limitação. Conversas ficam apenas na memória da página.
+- `/api/lab/state` atualiza a cada 5 segundos; os catálogos têm cache de 30
+  segundos por processo Flask. `/api/lab/chat` aceita JSON com `robot_id` e
+  `question` (até 500 caracteres). Falhas isoladas de coleta não derrubam os
+  demais setores. Polling e animação param quando a página fica oculta.
+
+### Atualizar a VM
+
+Após integrar o PR, atualize o checkout da aplicação e reinicie o serviço Flask
+ou Gunicorn com o procedimento já usado nessa VM. A nova rota será
+`https://<endereço-atual>/lab`. Não é necessário instalar dependências Python
+adicionais. As variáveis `HERMES_*` continuam sendo as mesmas documentadas abaixo.
+O processo precisa ler os arquivos reais do Hermes para mostrar atividade real;
+rodar em outra máquina mostra os recursos dessa outra máquina.
+
+### Validar o laboratório
+
+```bash
+python -m pytest tests/ -q
+python tools/check_html.py
+# Em outro terminal, mantenha python app.py rodando.
+npm ci                       # ferramentas de desenvolvimento, não de produção
+npx playwright install chromium
+npm run test:browser
+```
+
+`LAB_TEST_URL` pode apontar os testes de navegador para outro endereço local.
+Os testes cobrem dados ausentes, eventos Unix/ISO, subagentes e parentesco,
+estados antigos, isolamento de coletores, validação da conversa, renderização
+WebGL, movimentação, texto não confiável, reconexão, mobile e fallback sem GPU.
+Em Windows sem privilégio de symlink, o teste preexistente
+`test_symlink_quebrado_na_memoria` precisa ser executado em Linux ou excluído
+localmente com `-k 'not symlink_quebrado'`.
+
+Para reconstruir a dependência 3D: `npm ci && npm run build:three`. O arquivo
+gerado é versionado; preserve `static/vendor/THREE-LICENSE.txt` nas atualizações.
+
 > **Sem autenticacao.** O dashboard e as rotas `/api/*` estao abertos a quem
 > alcancar a porta, e expoem processos, disco, memoria e o config (redigido) da
 > VM. Rode atras de tunel SSH, firewall ou basic auth do nginx enquanto a auth

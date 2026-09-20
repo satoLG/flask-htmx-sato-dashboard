@@ -1,0 +1,35 @@
+name: Dashboard and laboratory checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: pip install flask pyyaml pytest lancedb pandas
+      - run: python -m pytest tests/ -q
+      - run: python tools/check_html.py
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Start local dashboard
+        run: |
+          python app.py > /tmp/sato-lab.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8080/lab > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/sato-lab.log
+          exit 1
+      - run: npm run test:browser
