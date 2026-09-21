@@ -23,14 +23,29 @@ são modelos procedurais originais, sem arquivos extraídos dos jogos de referê
 - Setores: núcleo Hermes (agentes, subagentes e tools), providers, MCP, RAG,
   memória/skills, cron e infraestrutura. As linhas do piso representam a
   arquitetura conceitual, não tráfego de rede capturado.
-- WASD/setas ou clique no piso para andar; E perto de um robô para conversar.
-  Arraste para girar, use a roda/+/- para zoom. No celular há controles de toque.
-  A lista de setores e de robôs também funciona sem WebGL 2.
+- A cena Three.js ocupa toda a tela; mapa, telemetria e conversa são overlays.
+  Clique/toque no piso para andar ou use WASD/setas. Arraste para girar e use a
+  roda para zoom. **Seguir** acompanha o personagem; **Sala** enquadra o laboratório.
+  Não há controles de movimento na tela. Placas físicas identificam as estações.
+- A lista de estações/robôs escolhe um destino e o personagem caminha até ele,
+  contornando equipamentos e robôs. **Conversar** e a tecla E só funcionam
+  dentro da estação, perto do robô. Durante o diálogo, a câmera sobe e recua,
+  deixando os personagens abaixo do chat translúcido; Escape encerra a conversa.
+  Sem WebGL 2, o painel de telemetria e o dashboard continuam disponíveis.
 - Guias explicam cada setor. Robôs individuais representam processos detectados,
   registros em `agent_runs`/`subagent_runs`, servidores MCP e jobs. O laboratório
-  lê até 48 registros por tabela de agentes. Mostra até oito robôs por setor no
-  3D; selecionar um robô na lista o traz para a cena. A lista contém todos os
-  robôs incluídos no snapshot.
+  lê até 48 registros por tabela de agentes. Mostra até quatro robôs por setor:
+  responsável e três bancadas auxiliares. Selecionar outro robô na lista reserva
+  uma bancada para ele; a lista contém todos os robôs incluídos no snapshot.
+  Os monitores mostram dados reais, nome e estado do trabalhador daquela bancada.
+- Avatar e robôs têm hierarquias de ossos com poses procedurais: respiração,
+  mudança de apoio, piscar, andar coordenado e gestos. Robôs operam seus terminais
+  e se voltam para quem entra na estação; a pupila central é azul emissiva.
+  Esses gestos são ambientação, não evidência de execução. O indicador e os dados
+  continuam distinguindo atividade real, dados ausentes e leituras antigas.
+  A cena limita a 30 fps, agrupa geometria estática, reaproveita materiais e
+  atualiza sombras em cadência reduzida. Há pausa de animações no mapa e respeito
+  à preferência de movimento reduzido do sistema.
 - Dados ausentes aparecem como **sem telemetria**, nunca como uma execução
   fictícia. **Atividade recente** significa um evento nos últimos 180 segundos;
   **processo detectado** não confirma trabalho. Registros `running` sem um
@@ -63,13 +78,15 @@ python tools/check_html.py
 # Em outro terminal, mantenha python app.py rodando.
 npm ci                       # ferramentas de desenvolvimento, não de produção
 npx playwright install chromium
+npm run test:navigation
 npm run test:browser
 ```
 
 `LAB_TEST_URL` pode apontar os testes de navegador para outro endereço local.
 Os testes cobrem dados ausentes, eventos Unix/ISO, subagentes e parentesco,
 estados antigos, isolamento de coletores, validação da conversa, renderização
-WebGL, movimentação, texto não confiável, reconexão, mobile e fallback sem GPU.
+WebGL em tela cheia, colisão e caminhos, acesso aos sete setores, proximidade
+para conversar, subagentes, texto não confiável, reconexão, mobile e fallback sem GPU.
 Em Windows sem privilégio de symlink, o teste preexistente
 `test_symlink_quebrado_na_memoria` precisa ser executado em Linux ou excluído
 localmente com `-k 'not symlink_quebrado'`.
