@@ -34,6 +34,24 @@ def test_lab_missing_sources_still_explorable(client):
     assert b'href="/lab"' in client.get("/").data
 
 
+def test_visual_instruments_expose_real_metrics_and_only_catalog_metadata(vm, client, monkeypatch):
+    monkeypatch.setattr(lab.vm, "snapshot", lambda **kw: {"cpu": {"total": 0}, "memory": {"total": 1024, "used_percent": 72.5}})
+    skill = vm.hermes / "skills" / "pesquisar"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("private body is not telemetry")
+    state = client.get("/api/lab/state").get_json()
+    assert state["metrics"]["cpu"] == 0
+    assert state["metrics"]["memory"] == 72.5
+    record = next(i for i in state["visuals"]["memory"]["items"] if i["name"] == "pesquisar")
+    assert record["modified"] > 0
+    assert set(record) == {"name", "category", "modified"}
+    assert "private body" not in str(state["visuals"])
+    archivist = next(w for w in state["workers"] if w["id"] == "catalog:skills")
+    assert archivist["kind"] == "catalog"
+    assert archivist["status"] == "observed"
+    assert "não um agente" in archivist["description"]
+
+
 @pytest.mark.parametrize("epoch", [False, True])
 def test_recent_events_are_history_not_running(vm, client, epoch):
     stamp = int(time.time()) if epoch else datetime.now(timezone.utc).isoformat()

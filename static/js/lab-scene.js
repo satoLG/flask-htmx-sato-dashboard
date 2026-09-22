@@ -1,4 +1,6 @@
 import * as T from '../vendor/three.module.min.js';
+import {createInstallations} from './lab-installations.js';
+import {createRagDome} from './lab-rag.js';
 import {batchStatic} from './lab-batch.js';
 import {createRigFactory, poseRig, dampAngle} from './lab-rigs.js';
 import {canStand, findPath, nearestFree, moveWithCollision} from './lab-navigation.js';
@@ -11,7 +13,7 @@ const ZONES = {
   vm: {x: 0, z: 8, color: '#80b4c6'},
 };
 const LIVE = new Set(['recent', 'running', 'process']);
-const NAMES = {hermes:'NÚCLEO',models:'PROVIDERS',mcp:'MCP',rag:'RAG',memory:'MEMÓRIA',cron:'CRON',vm:'VM'};
+const NAMES = {hermes:'NÚCLEO',models:'PROVIDERS',mcp:'MCP',rag:'RAG',memory:'SKILLS',cron:'CRON',vm:'VM'};
 
 export function createLabScene(container, callbacks) {
   const renderer = new T.WebGLRenderer({antialias: true, alpha: false, powerPreference: 'high-performance'});
@@ -67,7 +69,7 @@ export function createLabScene(container, callbacks) {
   function textPlane(parent, text, width, height, x, y, z, {color = '#315d59', background = '#dbe5da', floor = false, size = 65} = {}) {
     const canvas = document.createElement('canvas'); canvas.width = 768; canvas.height = 192;
     const ctx = canvas.getContext('2d'); ctx.fillStyle = background; ctx.fillRect(0, 0, 768, 192);
-    ctx.fillStyle = color; ctx.font = `600 ${size}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 384, 96);
+    ctx.fillStyle = color; ctx.font = `600 ${size}px monospace`;while(ctx.measureText(text).width>720&&size>16){size-=2;ctx.font=`600 ${size}px monospace`;}ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 384, 96);
     const texture = new T.CanvasTexture(canvas); texture.colorSpace = T.SRGBColorSpace;
     const material = new T.MeshBasicMaterial({map: texture, side: T.DoubleSide});
     const plane = mesh(parent, new T.PlaneGeometry(width, height), material, x, y, z, false);
@@ -92,7 +94,7 @@ export function createLabScene(container, callbacks) {
   tiles.receiveShadow = true; world.add(tiles);
   // Back wall deliberately leaves the front open for a readable dollhouse view.
   for (let x = -17; x <= 17; x += 2) {
-    box(world, 1.94, 5.6, .42, '#c5d1c7', x, 2.8, -13.2);
+    box(world, 1.94, 8.6, .42, '#c5d1c7', x, 4.3, -13.2);
     box(world, 1.94, .12, .45, '#91a9a1', x, 2.2, -13.17);
     box(world, 1.5, .09, .12, glow('#c8f4e3'), x, 4.85, -12.9);
   }
@@ -100,7 +102,7 @@ export function createLabScene(container, callbacks) {
     box(world, .42, 3.2, 1.94, '#adbfb4', -18.1, 1.6, z);
     box(world, .1, .09, 1.4, glow('#c8f4e3'), -17.84, 2.7, z);
   }
-  box(world, 36.8, .28, .65, '#405b59', 0, 5.72, -13.2);
+  box(world, 36.8, .28, .65, '#405b59', 0, 8.72, -13.2);
   for (const y of [3.8, 4.18]) rod(world, [-17, y, -12.7], [17, y, -12.7], .1, mat('#667c77', .65));
   for (const x of [-16, -7, 7, 16]) {
     box(world, .18, 1.45, .26, '#536d67', x, 3.95, -12.63);
@@ -179,8 +181,8 @@ export function createLabScene(container, callbacks) {
     // Physical double-sided plaque, with a steel post and an actual collider.
     const sign = new T.Group(); group.add(sign); sign.position.set(1.95,0,2.12);
     box(sign,.4,.13,.38,'#647e75',0,.36,0); box(sign,.075,1.1,.08,'#68867b',0,.9,0);
-    box(sign,1.7,.45,.13,'#294c4d',0,1.49,0);
-    const plaque = textPlane(sign,NAMES[id],1.58,.36,0,1.49,.071,{color:'#d7eee5',background:'#294c4d',size:68});
+    box(sign,2.65,.75,.13,'#294c4d',0,1.59,0);
+    const plaque = textPlane(sign,NAMES[id],2.52,.67,0,1.59,.071,{color:'#d7eee5',background:'#294c4d',size:142});
     const rear = plaque.clone(); rear.position.z=-.071; rear.rotation.y=Math.PI; sign.add(rear);
     sign.traverse(o=>o.userData.station=id);
     obstacles.push({x:zone.x+1.95,z:zone.z+2.12,w:.55,d:.5});
@@ -210,15 +212,6 @@ export function createLabScene(container, callbacks) {
     sphere(patch, .08, glow('#80d3d8'), x - .17, y, -1.28);
     rod(patch, [x + .1, y, -1.24], [x + .2, .44, -1.1], .035, mat('#456f65'));
   }
-  // RAG archive: luminous glass towers enclosing stacked document wafers.
-  const archive = zones.get('rag').group;
-  for (const side of [-1, 1]) {
-    const x = side * 1.5;
-    cylinder(archive, .55, .2, '#749a81', x, .4, -1.1);
-    cylinder(archive, .48, 2.45, new T.MeshStandardMaterial({color: '#84cbb2', transparent: true, opacity: .28, roughness: .2, depthWrite: false}), x, 1.65, -1.1);
-    ring(archive, .5, .07, '#e0e6d2', x, 2.85, -1.1, true);
-    for (let i = 0; i < 6; i++) box(archive, .55, .12, .5, i % 2 ? '#daebd5' : glow('#78c9a0'), x, .65 + i * .33, -1.1);
-  }
   // Memory shelves and removable context cartridges.
   const shelves = zones.get('memory').group;
   box(shelves, 3.4, 2.1, .54, '#678374', 0, 1.4, -1.8);
@@ -236,17 +229,6 @@ export function createLabScene(container, callbacks) {
   }
   rod(scheduler, [0, 2.85, -1.45], [.52, 3.15, -1.45], .045, glow('#ebc786'));
   rod(scheduler, [0, 2.85, -1.44], [0, 3.44, -1.44], .03, '#e9e3c5');
-  // Infrastructure cabinets.
-  const racks = zones.get('vm').group;
-  for (const side of [-1, 1]) {
-    box(racks, .82, 2.4, .88, '#486b63', side * 1.65, 1.5, -.65);
-    box(racks, .72, 2.25, .06, '#274d49', side * 1.65, 1.5, -.18);
-    for (let i = 0; i < 7; i++) {
-      box(racks, .54, .19, .06, '#8ea595', side * 1.65, .6 + i * .29, -.12);
-      sphere(racks, .025, glow('#a6d3a1'), side * 1.65 + .2, .6 + i * .29, -.07);
-    }
-  }
-
   // Each extra worker has its own bench, terminal and tool to operate.
   const slots = [[0,.25],[-2.85,.3],[2.85,.3],[0,3.15]];
   const benches = new Map(), machineParts = [];
@@ -268,14 +250,18 @@ export function createLabScene(container, callbacks) {
     // Back equipment, not just the desktops, participates in collision.
     obstacles.push({x:zone.x,z:zone.z-1.8,w:id==='hermes'?4.8:3.6,d:.8});
   }
-  for (const side of [-1,1]) obstacles.push({x:side*1.65,z:7.35,w:.9,d:1});
+  for (const side of [-1,1]) obstacles.push({x:side*1.65,z:6.1,w:1.25,d:.5});
   // Keep the plaques raycastable when batching the static chamber.
   world.traverse(o => { if (o.isMesh && o.userData.station) hitObjects.push(o); });
+  const art={box,sphere,cylinder,ring,rod,mesh,mat,glow,geo,textPlane};
+  const installations=createInstallations(world,zones,art),ragDome=createRagDome(world,art);
+  obstacles.push({x:10,z:-7.45,w:5.8,d:3.2});
   batchStatic(world);
 
   const factory = createRigFactory({box,sphere,cylinder,ring,rod,mesh,mat,glow,geo});
   const hero = factory.avatar(), avatar = hero.root; avatar.position.set(-4,.13,4); avatar.scale.setScalar(1.12); world.add(avatar);
   const destination = ring(world,.27,.023,glow('#c6f0f7'),0,.16,0,true); destination.visible=false;
+  let study=false,savedStudyCamera=null;
   let cameraMode='follow', savedCamera=null, chatId=null, desiredRobot=null, route=[], location=null, candidate=null, emoteUntil=0;
   let targetAzimuth=azimuth, targetElevation=elevation, wasMoving=false, contextLost=false;
   const circles=[], zoneByRobot=new Map();
@@ -296,7 +282,7 @@ export function createLabScene(container, callbacks) {
   function showBubble(rig,text) { rig.bubble.material=emoticons.get(text);rig.bubble.visible=true; }
   function refreshCircles() { circles.length=0; for (const [id,item] of robots) circles.push({id,x:item.rig.root.position.x,z:item.rig.root.position.z,r:item.slot===0?.57:.44}); }
   function update(data) {
-    latestData=data;stale=false;dirty=true;
+    latestData=data;stale=false;dirty=true;installations.update(data);
     const keep=new Set();
     for (const [id,zone] of Object.entries(ZONES)) {
       const workers=data.workers.filter(w=>w.sector===id), guide=workers.find(w=>w.kind==='guide');
@@ -321,14 +307,14 @@ export function createLabScene(container, callbacks) {
       const z=zones.get(id);z.status=guide?.status||'unknown';z.trim.material=LIVE.has(z.status)?glow(zone.color):mat('#8ca89a');
       if(guide)z.display.update([NAMES[id]+' / '+guide.name,guide.status_label,...(guide.facts||[]).slice(0,2)]);
     }
-    for(const[id,item]of robots)if(!keep.has(id)){world.remove(item.rig.root);for(const g of item.rig.ownedGeometry)g.dispose();item.rig.pupil.material.dispose();robots.delete(id);zoneByRobot.delete(id);renderer.shadowMap.needsUpdate=true;}
+    for(const[id,item]of robots)if(!keep.has(id)){world.remove(item.rig.root);for(const g of item.rig.ownedGeometry)g.dispose();item.rig.pupil.material.dispose();item.rig.opticMaterial.dispose();robots.delete(id);zoneByRobot.delete(id);renderer.shadowMap.needsUpdate=true;}
     refreshCircles();
     const free=nearestFree(avatar.position,obstacles,circles,2);if(free&&!canStand(avatar.position.x,avatar.position.z,obstacles,circles)){avatar.position.x=free.x;avatar.position.z=free.z;stopWalking();}
     if(route.length)route=findPath(avatar.position,route.at(-1),obstacles,circles);
     if(chatId&&!robots.has(chatId))endChat();
   }
   function stopWalking(){keys.clear();route=[];destination.visible=false;dirty=true;}
-  function navigate(point){if(chatId)return false;const next=findPath(avatar.position,point,obstacles,circles);if(!next.length){callbacks.onToast('Não encontrei um caminho livre até esse ponto.');return false;}route=next;destination.position.set(next.at(-1).x,groundAt(next.at(-1).x,next.at(-1).z)+.025,next.at(-1).z);destination.visible=true;dirty=true;return true;}
+  function navigate(point){if(chatId||study)return false;const next=findPath(avatar.position,point,obstacles,circles);if(!next.length){callbacks.onToast('Não encontrei um caminho livre até esse ponto.');return false;}route=next;destination.position.set(next.at(-1).x,groundAt(next.at(-1).x,next.at(-1).z)+.025,next.at(-1).z);destination.visible=true;dirty=true;return true;}
   function approach(item){
     const center=item.rig.root.position,options=[];
     for(let i=0;i<16;i++){const angle=i*Math.PI/8,p={x:center.x+Math.sin(angle)*1.5,z:center.z+Math.cos(angle)*1.5};if(inside(item.worker.sector,p)&&canStand(p.x,p.z,obstacles,circles))options.push(p);}
@@ -348,11 +334,11 @@ export function createLabScene(container, callbacks) {
   function canInteract(id){const item=robots.get(id);return !contextLost&&!!item&&inside(item.worker.sector)&&dist(avatar.position,item.rig.root.position)<2.05;}
   function interact(){if(!chatId&&candidate&&canInteract(candidate.worker.id))callbacks.onInteract(candidate.worker.id);}
   function beginChat(id){
-    if(!canInteract(id)||chatId)return false;
+    if(!canInteract(id)||chatId||study)return false;
     stopWalking();chatId=id;savedCamera={mode:cameraMode,azimuth:targetAzimuth,elevation:targetElevation,radius:targetRadius};
     nucleus.visible = false;renderer.shadowMap.needsUpdate=true;
     const robot=robots.get(id).rig,dx=robot.root.position.x-avatar.position.x,dz=robot.root.position.z-avatar.position.z;
-    targetAzimuth=Math.atan2(-dz,dx)+.12;targetElevation=.73;targetRadius=17.5;
+    targetAzimuth=Math.atan2(-dz,dx)+.12;targetElevation=.73;targetRadius=18.5;
     hero.greeting=animationTime+1.5;robot.greeting=animationTime+1.8;showBubble(hero,'✦');showBubble(robot,'…');emoteUntil=performance.now()+2500;
     callbacks.onCamera('chat');dirty=true;return true;
   }
@@ -363,8 +349,8 @@ export function createLabScene(container, callbacks) {
     callbacks.onCamera(cameraMode);dirty=true;
   }
   function emote(kind){if(!chatId)return;const rig=robots.get(chatId)?.rig;if(!rig)return;showBubble(hero,kind==='question'?'?':'…');showBubble(rig,kind==='question'?'…':kind==='error'?'!':'✓');emoteUntil=performance.now()+3000;dirty=true;}
-  function setCameraMode(mode){if(chatId)return;cameraMode=mode;targetRadius=mode==='room'?Math.max(44,43/camera.aspect):14;targetElevation=mode==='room'?.77:.64;targetAzimuth=.55;callbacks.onCamera(mode);dirty=true;}
-  function setStale(value){stale=value;dirty=true;if(value){for(const[id,z]of zones){z.trim.material=mat('#8ca89a');z.display.update([NAMES[id],'DADOS DESATUALIZADOS','Aguardando conexão']);}for(const item of robots.values())item.rig.indicator.material=glow('#829c93');}}
+  function setCameraMode(mode){if(chatId||study)return;cameraMode=mode;targetRadius=mode==='room'?Math.max(44,43/camera.aspect):14;targetElevation=mode==='room'?.77:.64;targetAzimuth=.55;callbacks.onCamera(mode);dirty=true;}
+  function setStale(value){stale=value;installations.setStale(value);dirty=true;if(value){for(const[id,z]of zones){z.trim.material=mat('#8ca89a');z.display.update([NAMES[id],'DADOS DESATUALIZADOS','Aguardando conexão']);}for(const item of robots.values())item.rig.indicator.material=glow('#829c93');}}
   // Rays reach actual robot meshes and actual physical signboards, not HTML labels.
   const raycaster=new T.Raycaster(),pointer=new T.Vector2(),floor=new T.Plane(new T.Vector3(0,1,0),-.15);let drag=null;
   function cast(event){const r=container.getBoundingClientRect();pointer.set((event.clientX-r.left)/r.width*2-1,-(event.clientY-r.top)/r.height*2+1);raycaster.setFromCamera(pointer,camera);}
@@ -372,6 +358,7 @@ export function createLabScene(container, callbacks) {
   container.addEventListener('pointermove',e=>{if(!drag)return;if(Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>7)drag.moved=true;if(drag.moved){targetAzimuth-=(e.clientX-drag.px)*.006;targetElevation=T.MathUtils.clamp(targetElevation+(e.clientY-drag.py)*.004,.35,1.18);dirty=true;}drag.px=e.clientX;drag.py=e.clientY;});
   container.addEventListener('pointerup',e=>{
     if(!drag||chatId)return;const clicked=!drag.moved;drag=null;if(!clicked)return;cast(e);
+    if(study){const node=ragDome.pick(raycaster);if(node)callbacks.onRagNode(ragDome.getNode(node));return;}
     const objects=[...hitObjects,...[...robots.values()].map(item=>item.rig.root)];
     const hits=raycaster.intersectObjects(objects,true).filter(h=>!h.object.isSprite);
     if(hits.length){let object=hits[0].object;while(object&&!object.userData.robot&&!object.userData.station)object=object.parent;if(object?.userData.robot){const id=object.userData.robot;if(canInteract(id))callbacks.onInteract(id);else visitRobot(id);return;}if(object?.userData.station){visitRobot(`guide:${object.userData.station}`);return;}}
@@ -379,9 +366,9 @@ export function createLabScene(container, callbacks) {
   });
   for(const type of ['pointercancel','lostpointercapture'])container.addEventListener(type,()=>drag=null);
   container.addEventListener('wheel',e=>{if(chatId)return;e.preventDefault();targetRadius=T.MathUtils.clamp(targetRadius+Math.sign(e.deltaY)*1.2,8,75);dirty=true;},{passive:false});
-  container.addEventListener('keydown',e=>{if(chatId)return;const key=e.key.length===1?e.key.toLowerCase():e.key;if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)){e.preventDefault();keys.add(key);route=[];}if(key==='e'){e.preventDefault();interact();}});
+  container.addEventListener('keydown',e=>{if(chatId||study)return;const key=e.key.length===1?e.key.toLowerCase():e.key;if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)){e.preventDefault();keys.add(key);route=[];}if(key==='e'){e.preventDefault();interact();}});
   window.addEventListener('keyup',e=>keys.delete(e.key.length===1?e.key.toLowerCase():e.key));window.addEventListener('blur',stopWalking);container.addEventListener('blur',()=>keys.clear());
-  const resizeObserver=new ResizeObserver(()=>{const r=container.getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(cameraMode==='room'&&!chatId)targetRadius=Math.max(44,43/camera.aspect);dirty=true;});resizeObserver.observe(container);
+  const resizeObserver=new ResizeObserver(()=>{const r=container.getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(study)targetRadius=camera.aspect>.85?13:20;else if(cameraMode==='room'&&!chatId)targetRadius=Math.max(44,43/camera.aspect);dirty=true;});resizeObserver.observe(container);
   const direction=new T.Vector3();let previousLocation='',previousCandidate='';
   function frame(ms){
     requestAnimationFrame(frame);if(ms-lastTime<1000/30)return;
@@ -405,9 +392,11 @@ export function createLabScene(container, callbacks) {
     destination.visible=route.length>0&&!chatId;
     location=Object.keys(ZONES).find(id=>inside(id))||null;candidate=null;let nearest=2.05;
     for(const item of robots.values()){const distance=dist(avatar.position,item.rig.root.position);if(inside(item.worker.sector)&&distance<nearest){candidate=item;nearest=distance;}}
+    if(desiredRobot&&canInteract(desiredRobot))candidate=robots.get(desiredRobot);
     if(location!==previousLocation){callbacks.onLocation(location);previousLocation=location;if(location){for(const item of robots.values())if(item.worker.sector===location){item.rig.greeting=animationTime+1.3;showBubble(item.rig,'✦');}emoteUntil=ms+1700;}}
     const candidateId=candidate?.worker.id||'';if(candidateId!==previousCandidate){callbacks.onCandidate(candidate?.worker||null);previousCandidate=candidateId;}
-    if(chatId){const other=robots.get(chatId)?.rig.root;if(other){target.copy(avatar.position).add(other.position).multiplyScalar(.5);target.y=5.8;avatar.rotation.y=dampAngle(avatar.rotation.y,Math.atan2(other.position.x-avatar.position.x,other.position.z-avatar.position.z),dt);}}
+    if(chatId){const other=robots.get(chatId)?.rig.root;if(other){target.copy(avatar.position).add(other.position).multiplyScalar(.5);target.y=8.4;avatar.rotation.y=dampAngle(avatar.rotation.y,Math.atan2(other.position.x-avatar.position.x,other.position.z-avatar.position.z),dt);}}
+    else if(study){target.set(10,2.5,-7.45);if(camera.aspect>.85){target.x-=Math.cos(azimuth)*1.8;target.z+=Math.sin(azimuth)*1.8;}else target.y=.4;}
     else if(cameraMode==='follow'){target.copy(avatar.position);target.y+=1.1;}
     else target.set(0,.65,0);
     const changing=aim.distanceToSquared(target)>.0001||Math.abs(radius-targetRadius)>.002||Math.abs(azimuth-targetAzimuth)>.002||Math.abs(elevation-targetElevation)>.002;
@@ -418,21 +407,27 @@ export function createLabScene(container, callbacks) {
     const interacting=chatId?robots.get(chatId):candidate;
     poseRig(hero,animationTime,dt,{speed:moving?1:0,attention:interacting?1:0,talk:!!chatId,lookYaw:0,reduced:paused});
     for(const item of robots.values()){
-      const attention=inside(item.worker.sector)?1:0,rig=item.rig;
+      const rig=item.rig,attention=inside(item.worker.sector)&&(item.worker.kind!=='catalog'||chatId===item.worker.id||animationTime<rig.greeting)?1:0;
       const look=Math.atan2(avatar.position.x-rig.root.position.x,avatar.position.z-rig.root.position.z);
       const beforeTurn=rig.root.rotation.y;
       rig.root.rotation.y=dampAngle(beforeTurn,attention?look:Math.PI,dt,attention?4:2);
       // Ambient inspection/tapping remains subtle while real work increases its pace.
-      poseRig(rig,animationTime,dt,{speed:Math.min(.3,Math.abs(rig.root.rotation.y-beforeTurn)/dt*.2),attention,work:stale?.7:item.worker.status==='running'?1:.8,talk:chatId===item.worker.id,lookYaw:T.MathUtils.clamp(Math.atan2(Math.sin(look-rig.root.rotation.y),Math.cos(look-rig.root.rotation.y)),-.3,.3),reduced:paused});
+      poseRig(rig,animationTime,dt,{speed:Math.min(.3,Math.abs(rig.root.rotation.y-beforeTurn)/dt*.2),attention,work:stale?.7:item.worker.status==='running'||item.worker.kind==='catalog'&&installations.memoryActive()?1:.8,talk:chatId===item.worker.id,lookYaw:T.MathUtils.clamp(Math.atan2(Math.sin(look-rig.root.rotation.y),Math.cos(look-rig.root.rotation.y)),-.3,.3),reduced:paused});
     }
     if(!paused)for(const part of machineParts){if(dist(avatar.position,part.position)<13)part.object.rotation.y=animationTime*.65+part.slot;}
     if(ms-lastPosition>150){callbacks.onPosition(avatar.position.x,avatar.position.z);lastPosition=ms;}
     // Static room shadows are cached; update actors at a lower cadence.
     if(ms-lastShadow>700&&moving){renderer.shadowMap.needsUpdate=true;lastShadow=ms;}
+    installations.tick(animationTime,dt,paused);ragDome.tick(animationTime,camera);
     renderer.render(world,camera);
+  }
+  function setRagOpen(value){
+    if(value){if(chatId||!inside('rag'))return false;stopWalking();study=true;savedStudyCamera={mode:cameraMode,azimuth:targetAzimuth,elevation:targetElevation,radius:targetRadius};targetRadius=camera.aspect>.85?13:20;targetElevation=.54;targetAzimuth=.28;callbacks.onCamera('rag');}
+    else if(study){study=false;previousCandidate=null;cameraMode=savedStudyCamera.mode;targetRadius=savedStudyCamera.radius;targetAzimuth=savedStudyCamera.azimuth;targetElevation=savedStudyCamera.elevation;savedStudyCamera=null;callbacks.onCamera(cameraMode);}
+    dirty=true;return true;
   }
   callbacks.onCamera('follow');requestAnimationFrame(frame);
   renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;stopWalking();callbacks.onLostContext(true);});
   renderer.domElement.addEventListener('webglcontextrestored',()=>{contextLost=false;dirty=true;renderer.shadowMap.needsUpdate=true;callbacks.onLostContext(false);});
-  return {update,visitRobot,canInteract,interact,beginChat,endChat,emote,setCameraMode,setStale,stopWalking,setPaused(value){paused=value;dirty=true;}};
+  return {setRagOpen,setRagGraph(payload,options){dirty=true;return ragDome.setGraph(payload,options);},selectRagNode(id){ragDome.select(id);dirty=true;},setRagBusy(value){ragDome.setBusy(value);dirty=true;},updateHeatmap(payload){installations.updateHeatmap(payload);dirty=true;},update,visitRobot,canInteract,interact,beginChat,endChat,emote,setCameraMode,setStale,stopWalking,setPaused(value){paused=value;dirty=true;}};
 }

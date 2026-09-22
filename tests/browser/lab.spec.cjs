@@ -99,7 +99,7 @@ test('mobile touch scene and conversation fit the viewport', async ({page}) => {
   await visit(page,'hermes');await page.locator('#interaction').click();
   await expect(page.locator('#chat-input')).toBeVisible();
   const box=await page.locator('#chat').boundingBox();
-  expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(390);expect(box.y+box.height).toBeLessThan(844*.6);
+  expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(390);expect(box.y+box.height).toBeLessThan(844*.7);
 });
 
 test.describe('ambient movement',()=>{

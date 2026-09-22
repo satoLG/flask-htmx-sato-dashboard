@@ -1,12 +1,14 @@
 // The canvas owns space and interaction. These overlays only present telemetry.
+import {createRagUI} from './lab-rag-ui.js';
 const $ = id => document.getElementById(id);
-const SECTORS = [['hermes','NÚCLEO','◎'],['models','PROVIDERS','⤨'],['mcp','MCP','⌘'],['rag','RAG','▥'],['memory','MEMÓRIA','◈'],['cron','CRON','◷'],['vm','VM','▤']];
-const KINDS = {guide:'Responsável pela estação',agent:'Agente',subagent:'Subagente',process:'Processo da VM',service:'Servidor MCP',job:'Cron job'};
+const SECTORS = [['hermes','NÚCLEO','◎'],['models','PROVIDERS','⤨'],['mcp','MCP','⌘'],['rag','RAG','▥'],['memory','SKILLS','◈'],['cron','CRON','◷'],['vm','VM','▤']];
+const KINDS = {guide:'Responsável pela estação',agent:'Agente',subagent:'Subagente',process:'Processo da VM',service:'Servidor MCP',job:'Cron job',catalog:'Representação do catálogo'};
 const name = id => SECTORS.find(s => s[0] === id)?.[1] || 'EXPLORANDO';
 const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text !== undefined) el.textContent = text; return el; };
 const clock = value => { const d = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(String(value)) ? value : `${String(value).replace(' ','T')}Z`); return Number.isNaN(+d) ? '—' : d.toLocaleTimeString('pt-BR'); };
 let scene = null, state = null, sector = 'hermes', selectedRobot = null, inFlight = false, timer = null, lastSuccess = 0, chatBusy = false, toastTimer;
 const histories = new Map();
+const ragUI=createRagUI(()=>scene,fetchJSON);
 function toast(text) { clearTimeout(toastTimer); $('toast').textContent = text; $('toast').hidden = false; toastTimer = setTimeout(() => $('toast').hidden = true, 3500); }
 function closePanel(id) { $(id).hidden = true; $(id === 'map-panel' ? 'map-toggle' : 'telemetry-toggle').setAttribute('aria-expanded','false'); }
 function closePanels() { closePanel('map-panel'); closePanel('telemetry-panel'); }
@@ -52,7 +54,8 @@ function renderState(data) {
   }
 }
 async function fetchJSON(url, options = {}) {
-  const response = await fetch(url,{...options,signal:AbortSignal.timeout(25000)}); const data = await response.json();
+  const {timeout=25000,...init}=options;
+  const response = await fetch(url,{...init,signal:AbortSignal.timeout(timeout)}); const data = await response.json();
   if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`); return data;
 }
 async function poll() {
@@ -113,14 +116,21 @@ poll();
 try {
   const {createLabScene} = await import('./lab-scene.js');
   scene = createLabScene($('scene'),{
-    onInteract:openChat, onToast:toast,
+    onInteract:openChat, onToast:toast,onRagNode:n=>ragUI.select(n),
     onCamera:mode => { for (const id of ['follow','room']) $('camera-' + id).setAttribute('aria-pressed',String(id === mode)); $('scene').dataset.camera = mode; },
-    onLocation:id => { $('location-name').textContent = name(id); if (id && id !== sector) { sector = id; renderRoster(); } },
+    onLocation:id => { $('rag-action').hidden=id!=='rag';$('location-name').textContent = name(id); if (id && id !== sector) { sector = id; renderRoster(); } },
     onCandidate:robot => { $('interaction').hidden = !robot || !!selectedRobot; $('interaction').dataset.robot = robot?.id || ''; $('interaction-name').textContent = robot ? `${name(robot.sector)} / ${robot.name}` : ''; },
     onPosition:(x,z) => { $('scene').dataset.x = x.toFixed(3); $('scene').dataset.z = z.toFixed(3); },
     onLostContext:lost => { $('scene-fallback').hidden = !lost; if (lost) closeChat(); },
   });
   if (state) scene.update(state);
+  ragUI.loadBase();
+  let lastHeat=null,heatBusy=false;
+  async function refreshInstruments(){
+    if(document.hidden||heatBusy)return;heatBusy=true;
+    try{const data=await fetchJSON('/api/activity/heatmap?days=365');if(data.error&&lastHeat)scene.updateHeatmap({...lastHeat,error:data.error});else{lastHeat=data;scene.updateHeatmap(data);}}catch{if(lastHeat)scene.updateHeatmap({...lastHeat,error:'Sem conexão'});}finally{heatBusy=false;}
+  }
+  refreshInstruments();setInterval(refreshInstruments,15000);setInterval(()=>{if(!document.hidden&&!ragUI.open)ragUI.loadBase();},60000);
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) $('motion-toggle').click();
   $('scene').focus({preventScroll:true});
 } catch (error) { console.warn('Laboratório 3D indisponível:',error); $('scene-fallback').hidden = false; }

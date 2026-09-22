@@ -21,6 +21,17 @@
     <button type="button" id="map-toggle" class="map-toggle glass" aria-expanded="false" aria-controls="map-panel">⌘ <span>Estações</span></button>
   </div>
   <button type="button" id="interaction" class="interaction glass" hidden><span class="action-symbol">◉</span><span><small id="interaction-name"></small><strong>Conversar</strong></span><kbd>E</kbd></button>
+  <button type="button" id="rag-action" class="rag-action glass" hidden>◎ Explorar rede RAG</button>
+  <aside id="rag-panel" class="rag-panel overlay glass" aria-label="Explorador RAG em 3D" hidden>
+    <div class="panel-heading"><div><small>BASE VETORIAL</small><h2>Conexões &amp; ideias</h2></div><button id="rag-close" type="button" aria-label="Fechar explorador RAG">×</button></div>
+    <p class="panel-intro">Explore os pontos da cúpula. Busque uma pergunta para iluminar os documentos encontrados.</p>
+    <form id="rag-search"><label class="sr-only" for="rag-query">Busca semântica</label><input id="rag-query" maxlength="4000" placeholder="O que você quer descobrir?" required><button id="rag-search-submit" type="submit">Buscar</button></form>
+    <p id="rag-summary" role="status" class="rag-summary">Aguardando base vetorial.</p>
+    <div class="rag-toolbar"><span id="rag-node-count">0 nós</span><button id="rag-reset" type="button">Voltar ao catálogo</button></div>
+    <div id="rag-node-list" class="rag-node-list" aria-label="Nós do grafo"></div>
+    <h3 id="rag-node-title">Selecione um ponto</h3><p id="rag-node-detail" class="rag-detail">Os documentos e relações vêm da mesma base do dashboard.</p>
+    <p class="rag-note">Layout 3D ilustrativo; distâncias da busca calculadas pela base vetorial. As linhas representam relações do catálogo e resultados, não o trajeto interno do algoritmo.</p>
+  </aside>
   <div id="toast" class="toast glass" role="status" hidden></div>
   <div id="loading" class="loading glass"><span class="loader-orbit">◎</span><strong>Preparando o laboratório</strong><small>UM LUGAR PARA SUAS IDEIAS</small></div>
   <div id="scene-fallback" class="fallback glass" hidden><h1>O laboratório precisa de WebGL 2.</h1><p>A telemetria continua disponível no painel. Para explorar e conversar com os robôs, abra em um navegador com aceleração gráfica.</p><a href="/dashboard">Abrir dashboard ↗</a></div>
