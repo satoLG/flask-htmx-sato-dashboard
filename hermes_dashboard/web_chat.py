@@ -47,10 +47,6 @@ def configure(app):
 
 def _connection():
     DB_PATH.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    try:
-        os.chmod(DB_PATH.parent, 0o700)
-    except OSError:
-        pass
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout=10000")
