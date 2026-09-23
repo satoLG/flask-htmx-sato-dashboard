@@ -5,7 +5,9 @@
   "scripts": {
     "test:navigation": "node --test tests/lab-navigation.test.mjs",
     "test:browser": "playwright test",
-    "build:three": "esbuild node_modules/three/build/three.module.js --bundle --minify --format=esm --outfile=static/vendor/three.module.min.js"
+    "build:three": "node tools/build-three.mjs",
+    "build:sato": "node tools/build-sato.mjs",
+    "test:avatar": "node --test tests/lab-avatar.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

@@ -168,7 +168,7 @@ $('motion-toggle').addEventListener('click', () => { const paused = $('motion-to
 poll();
 try {
   const {createLabScene} = await import('./lab-scene.js');
-  scene = createLabScene($('scene'),{
+  scene = await createLabScene($('scene'),{
     onInteract:openChat, onToast:toast,onRagNode:n=>ragUI.select(n),
     onCamera:mode => { for (const id of ['follow','room']) $('camera-' + id).setAttribute('aria-pressed',String(id === mode)); $('scene').dataset.camera = mode; },
     onLocation:id => { $('rag-action').hidden=id!=='rag';$('location-name').textContent = name(id); if (id && id !== sector) { sector = id; renderRoster(); } },
