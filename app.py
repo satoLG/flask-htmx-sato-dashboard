@@ -3,10 +3,12 @@
 A coleta de dados mora no pacote hermes_dashboard/; aqui ficam so as rotas.
 Rodar com: python3 app.py  (ou gunicorn app:app)
 """
+import hashlib
 import os
 import traceback
+from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, abort, jsonify, render_template, request
 
 from hermes_dashboard import activity, cron, lab, mcp, memory, rag, stats, tools, vm, web_chat
 from hermes_dashboard import db
@@ -14,6 +16,17 @@ from hermes_dashboard import config
 
 app = Flask(__name__)
 web_chat.configure(app)
+
+# A version in the path also versions relative ES-module imports and GLB URLs.
+# Reusing /static/js/lab.js can pair cached pre-immersive JS with today's HTML.
+_static_root = Path(app.static_folder)
+_lab_files = sorted(path for path in _static_root.rglob('*') if path.is_file())
+_lab_digest = hashlib.sha256()
+for _path in [Path(app.root_path) / 'templates/lab.html', *_lab_files]:
+    _lab_digest.update(str(_path.relative_to(app.root_path)).replace('\\', '/').encode())
+    _lab_digest.update(b'\0')
+    _lab_digest.update(_path.read_bytes())
+LAB_ASSET_VERSION = _lab_digest.hexdigest()[:16]
 
 # O dashboard de observabilidade existente continua público. O novo chat Hermes
 # tem autenticação própria; não confundir essa proteção com a das demais rotas.
@@ -83,7 +96,14 @@ def dashboard():
 
 @app.route("/lab")
 def laboratory():
-    return render_template("lab.html")
+    return render_template("lab.html", lab_asset_version=LAB_ASSET_VERSION)
+
+
+@app.route("/lab-assets/<version>/<path:filename>")
+def lab_asset(version, filename):
+    if version != LAB_ASSET_VERSION:
+        abort(404)
+    return app.send_static_file(filename)
 
 
 @app.route("/api/lab/state")

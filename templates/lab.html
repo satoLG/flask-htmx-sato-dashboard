@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#203c40">
   <title>Laboratório · Sato Agents</title>
-  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/lab.css') }}">
+  <link rel="icon" href="{{ url_for('lab_asset', version=lab_asset_version, filename='favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/lab.css') }}">
 </head>
 <body>
 <main id="lab" aria-label="Laboratório interativo do Hermes">
@@ -60,6 +60,6 @@
   </section>
   <noscript><div class="fallback glass"><h1>Ative JavaScript para entrar no laboratório.</h1><a href="/dashboard">Abrir dashboard ↗</a></div></noscript>
 </main>
-<script type="module" src="{{ url_for('static', filename='js/lab.js') }}"></script>
+<script type="module" src="{{ url_for('lab_asset', version=lab_asset_version, filename='js/lab.js') }}"></script>
 </body>
 </html>

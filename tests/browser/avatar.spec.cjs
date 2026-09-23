@@ -30,7 +30,7 @@ test('real GLB textures render and animated poses blend without WebGL errors',as
 });
 
 test('failed avatar request leaves the telemetry fallback usable',async({page})=>{
-  await page.route('**/static/models/sato.glb',route=>route.abort());
+  await page.route('**/models/sato.glb',route=>route.abort());
   await page.goto('/lab');await expect(page.locator('#loading')).toBeHidden();
   await expect(page.locator('#scene-fallback')).toBeVisible();
   await page.locator('#telemetry-toggle').click();await expect(page.locator('#telemetry-panel')).toBeVisible();
