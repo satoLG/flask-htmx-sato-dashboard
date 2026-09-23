@@ -1,6 +1,14 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {canStand,findPath,clearSegment,moveWithCollision,PLAYER_RADIUS,BOUNDS} from '../static/js/lab-navigation.js';
+import {percent,instrumentData,heatLevel} from '../static/js/lab-telemetry.js';
+
+test('instruments distinguish missing, zero and bounded host readings',()=>{
+  assert.equal(percent(null),null);assert.equal(percent('45'),null);assert.equal(percent(NaN),null);assert.equal(percent(0),0);assert.equal(percent(110),100);
+  const data=instrumentData({metrics:{cpu:37.5,memory:68},events:[{kind:'model',output_tokens:42},{kind:'model',output_tokens:0},{kind:'tool'}]});
+  assert.equal(data.cpu,37.5);assert.equal(data.ram,68);assert.equal(data.outgoing,2);assert.equal(data.incoming,1);
+  assert.equal(instrumentData({}).cpu,null);assert.equal(heatLevel(0,0),0);assert.equal(heatLevel(10,10),4);
+});
 
 test('walking cannot tunnel through a robot even with a long frame',()=>{
   const robots=[{x:0,z:0,r:.57}],end=moveWithCollision({x:-2,z:0},5,0,[],robots);

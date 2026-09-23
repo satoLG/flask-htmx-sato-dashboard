@@ -51,6 +51,22 @@ são modelos procedurais originais, sem arquivos extraídos dos jogos de referê
   **processo detectado** não confirma trabalho. Registros `running` sem um
   timestamp recente aparecem como **último estado sem confirmação**. Identidade
   e parentesco vêm de `id`/`run_id`/`agent_id` e `parent_id`/`parent_run_id`.
+- Equipamentos da VM mostram CPU/RAM em barras luminosas e percentuais a cada
+  snapshot (5 s). Falhas preservam a última leitura identificada; sem leitura
+  anterior aparece um traço. Tubos dos providers reproduzem as chamadas da
+  amostra recente, com retorno quando há tokens de saída registrados; são um
+  replay visual, não uma captura de pacotes de rede.
+- A oficina de skills exibe nomes do catálogo em uma lousa, livros articulados
+  e mecanismos de escrita. Mudanças nos arquivos/atividades acionam os gestos.
+  O mural na parede mostra o calendário real de atividades (365 dias, UTC),
+  atualizado a cada 15 s. O catálogo de skills usa o cache existente de 30 s.
+- Dentro de RAG, **Explorar rede RAG** aproxima a cúpula: clique nos pontos ou
+  na lista para abrir repositórios/categorias/documentos. A busca usa o mesmo
+  `/api/rag/search` do dashboard (LanceDB/fastembed), mostra trechos e distâncias
+  reais e anima as conexões dos resultados. O layout 3D é ilustrativo: não
+  representa coordenadas originais dos embeddings nem o caminho interno do
+  índice. São até 180 nós e 12 resultados por busca; falhas preservam o último
+  grafo. O catálogo da cúpula atualiza a cada minuto fora do explorador.
 - A conversa responde em português sobre função, tarefa registrada, dados e
   falhas, com fonte e horário. É um intérprete local de perguntas de telemetria,
   **não uma sessão com o LLM/Hermes**. Não envia prompts aos providers, executa

@@ -172,6 +172,19 @@ def snapshot():
                                f"Último evento: {matching[0]['name']}" if matching else "Nenhuma execução recente comprovada neste setor.",
                                source, description=description, facts=facts, errors=errors))
 
+    # Fixed catalog attendants are explicit visual roles, never invented agent runs.
+    archives = catalogs["memory"]
+    for archive_id, name, entries in (
+        ("skills", "Arquivista de skills", archives.get("skills", [])),
+        ("memory", "Arquivista de memórias", [e for e in archives.get("documents", [])
+                                               if e.get("category") in ("memoria", "contexto")]),
+    ):
+        if entries:
+            workers.append(_worker(f"catalog:{archive_id}", name, "memory", "catalog", "observed",
+                                   f"{len(entries)} itens catalogados em disco.", "~/.hermes · catálogo de arquivos",
+                                   description="Sou uma representação visual do catálogo de arquivos, não um agente ou subagente em execução.",
+                                   facts=[f"{len(entries)} itens"] + [str(e.get("name", "")) for e in entries[:4]]))
+
     known_pids = {w.get("pid") for w in workers if w.get("pid")}
     for proc in live.get("processes", []):
         if str(proc.get("pid")) in known_pids:
@@ -206,12 +219,22 @@ def snapshot():
         warnings.append("Sem fonte de eventos disponível. O laboratório não pode confirmar atividade do Hermes.")
     if live.get("error"):
         warnings.append(str(live["error"]))
+    memory_entries = sorted(catalogs["memory"].get("skills", []) +
+                            catalogs["memory"].get("documents", []),
+                            key=lambda entry: entry.get("modified") or 0, reverse=True)[:48]
     return {"now": live.get("now") or datetime.now(timezone.utc).isoformat(),
             "catalog_sampled_at": catalogs["sampled_at"], "poll_seconds": 5, "window_seconds": 180,
             "sectors": [dict(id=s[0], name=s[1], code=s[2], description=s[3]) for s in SECTORS],
             "workers": workers, "events": events, "warnings": warnings,
             "connections": [{"from": "hermes", "to": s[0], "kind": "conceptual"} for s in SECTORS[1:]],
             "telemetry_available": event_available,
+            "visuals": {
+                "providers": {"primary": catalogs["models"].get("primary"),
+                              "fallbacks": catalogs["models"].get("fallbacks", [])},
+                "memory": {"count": catalogs["memory"].get("count", 0),
+                           "available": bool(catalogs["memory"].get("exists")),
+                           "items": [{k: entry.get(k) for k in ("name", "category", "modified")}
+                                     for entry in memory_entries]}},
             "metrics": {"processes": len(live.get("processes", [])), "recent_events": len(events),
                         "cpu": machine.get("cpu", {}).get("total"),
                         "memory": machine.get("memory", {}).get("used_percent") if machine.get("memory", {}).get("total") else None}}
