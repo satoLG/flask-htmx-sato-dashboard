@@ -67,15 +67,40 @@ são modelos procedurais originais, sem arquivos extraídos dos jogos de referê
   representa coordenadas originais dos embeddings nem o caminho interno do
   índice. São até 180 nós e 12 resultados por busca; falhas preservam o último
   grafo. O catálogo da cúpula atualiza a cada minuto fora do explorador.
-- A conversa responde em português sobre função, tarefa registrada, dados e
-  falhas, com fonte e horário. É um intérprete local de perguntas de telemetria,
-  **não uma sessão com o LLM/Hermes**. Não envia prompts aos providers, executa
-  comandos, altera jobs ou acessa chaves. Perguntas fora desse escopo recebem
-  uma explicação da limitação. Conversas ficam apenas na memória da página.
+- Com `HERMES_WEB_CHAT_PASSWORD_HASH` e `HERMES_WEB_CHAT_SESSION_SECRET`
+  configurados, a conversa privada enfileira perguntas para o **Hermes real**.
+  A pergunta e o estado ficam em SQLite (`~/.hermes/web-chat.sqlite3`, WAL), e
+  a interface consulta o resultado periodicamente sem manter uma conexão longa
+  com o túnel. O worker tenta novamente até três vezes e recupera trabalhos
+  interrompidos após o prazo de processamento. O histórico permanece ao fechar
+  a página. Sem a configuração privada, a prévia local mantém as respostas
+  determinísticas de telemetria usadas antes.
+- O chat web é limitado a perguntas informativas. Rejeita pedidos diretos de
+  ação antes da fila, usa apenas dados selecionados do snapshot e inicia uma
+  sessão Hermes separada com `--toolsets context_engine --ignore-rules`. Antes
+  de cada chamada, verifica no Hermes instalado que esse toolset resolve para
+  **zero ferramentas**; se isso mudar, falha fechado. O texto da pergunta vai
+  pela entrada padrão (`--query-file -`), sem shell. Assim o Hermes não recebe
+  terminal, escrita de arquivos, MCP, navegador nem ferramentas de delegação.
+  O bloqueio de execução é estrutural; o modelo ainda pode produzir uma resposta
+  imprecisa, então estados e métricas continuam atribuídos à telemetria.
+- O acesso ao chat exige senha própria, sessão assinada em cookie HttpOnly,
+  Secure e SameSite Strict, token CSRF, origem coincidente e limite de tentativas
+  de login. Isso protege o chat; as outras rotas do dashboard permanecem com a
+  política de acesso anterior.
 - `/api/lab/state` atualiza a cada 5 segundos; os catálogos têm cache de 30
   segundos por processo Flask. `/api/lab/chat` aceita JSON com `robot_id` e
   `question` (até 500 caracteres). Falhas isoladas de coleta não derrubam os
   demais setores. Polling e animação param quando a página fica oculta.
+
+Para habilitar o chat privado na VM, defina no ambiente do serviço Flask
+`HERMES_WEB_CHAT_PASSWORD_HASH` (hash gerado por
+`werkzeug.security.generate_password_hash`) e
+`HERMES_WEB_CHAT_SESSION_SECRET` (segredo aleatório longo). Mantenha ambos fora
+do Git e preserve os valores entre reinícios. O processo Flask único da VM
+executa o worker em segundo plano. O Hermes instalado deve estar em
+`~/.hermes/hermes-agent`; o worker usa a configuração de provider desse Hermes.
+Quando o provider falha, a pergunta continua no banco para nova tentativa.
 
 ### Atualizar a VM
 
