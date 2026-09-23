@@ -79,11 +79,20 @@ são modelos procedurais originais, sem arquivos extraídos dos jogos de referê
 
 ### Atualizar a VM
 
-Após integrar o PR, atualize o checkout da aplicação e reinicie o serviço Flask
-ou Gunicorn com o procedimento já usado nessa VM. A nova rota será
-`https://<endereço-atual>/lab`. Não é necessário instalar dependências Python
-adicionais. As variáveis `HERMES_*` continuam sendo as mesmas documentadas abaixo.
-O processo precisa ler os arquivos reais do Hermes para mostrar atividade real;
+O job Hermes `update-dashboard` roda a cada 30 minutos em modo `no_agent`.
+Sua cópia instalada em `~/.hermes/scripts/update-dashboard.sh` corresponde a
+[`tools/update_dashboard.sh`](tools/update_dashboard.sh). O script busca a
+`main` de `satoLG/sato-agents-lab` por Git, tenta novamente em falhas de rede,
+e só aceita avanço linear com os arquivos versionados locais intactos. Antes
+de trocar a versão em `/home/leona/projects/hermes-dashboard`, valida Python,
+templates e a rota `/lab` em uma cópia temporária. Depois reinicia
+`hermes-dashboard.service` e verifica `/lab` e `/api/lab/state`. Se o serviço
+não voltar saudável, restaura a revisão anterior. Sem commit novo, não reinicia
+nem envia notificação. Para alterar o próprio procedimento de atualização,
+atualize também a cópia instalada no Hermes após integrar o PR.
+
+As variáveis `HERMES_*` continuam sendo as mesmas documentadas abaixo. O
+processo precisa ler os arquivos reais do Hermes para mostrar atividade real;
 rodar em outra máquina mostra os recursos dessa outra máquina.
 
 ### Validar o laboratório
