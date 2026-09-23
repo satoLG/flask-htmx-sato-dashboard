@@ -8,16 +8,15 @@ import traceback
 
 from flask import Flask, jsonify, render_template, request
 
-from hermes_dashboard import activity, cron, lab, mcp, memory, rag, stats, tools, vm
+from hermes_dashboard import activity, cron, lab, mcp, memory, rag, stats, tools, vm, web_chat
 from hermes_dashboard import db
 from hermes_dashboard import config
 
 app = Flask(__name__)
+web_chat.configure(app)
 
-# SEM AUTENTICACAO por decisao explicita: o dashboard e as rotas /api/* estao
-# abertas a quem alcancar a porta. Elas expoem processos, disco, memoria e o
-# config (redigido) da VM - nao publique em interface externa sem por auth na
-# frente (nginx com basic auth, tunel SSH, firewall).
+# O dashboard de observabilidade existente continua público. O novo chat Hermes
+# tem autenticação própria; não confundir essa proteção com a das demais rotas.
 
 
 @app.after_request
@@ -40,6 +39,8 @@ def handle_unexpected(error):
     if isinstance(error, HTTPException):
         return error
     app.logger.exception("erro nao tratado em %s", request.path)
+    if request.path.startswith("/api/lab/hermes-chat"):
+        return jsonify({"error": "Chat indisponível. Tente novamente."}), 500
     detail = f"{type(error).__name__}: {error}"
     if request.path.startswith("/api/"):
         return jsonify({"error": detail}), 500
@@ -102,6 +103,31 @@ def api_lab_chat():
         return jsonify({"error": "robô e pergunta obrigatórios; máximo de 500 caracteres"}), 400
     response = lab.answer(robot_id, question.strip())
     return (jsonify(response), 200) if response else (jsonify({"error": "Este robô não está mais no snapshot. Atualize o laboratório."}), 404)
+
+
+@app.get("/api/lab/hermes-chat/session")
+def api_hermes_chat_session():
+    return web_chat.session_status()
+
+
+@app.post("/api/lab/hermes-chat/login")
+def api_hermes_chat_login():
+    return web_chat.login()
+
+
+@app.post("/api/lab/hermes-chat/jobs")
+def api_hermes_chat_submit():
+    return web_chat.submit()
+
+
+@app.get("/api/lab/hermes-chat/jobs/<job_id>")
+def api_hermes_chat_job(job_id):
+    return web_chat.job(job_id)
+
+
+@app.get("/api/lab/hermes-chat/history")
+def api_hermes_chat_history():
+    return web_chat.history()
 
 @app.route("/api/activity/heatmap")
 def api_heatmap():
@@ -241,6 +267,9 @@ def api_recent():
 def api_day(date):
     return json_guard(lambda: activity.day_activity(date),
                       {"date": date, "events": [], "count": 0})
+
+
+web_chat.start_worker()
 
 
 if __name__ == "__main__":

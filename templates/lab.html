@@ -52,9 +52,11 @@
   <section id="chat" class="robot-chat glass" role="dialog" aria-modal="true" aria-labelledby="chat-name" hidden>
     <header class="chat-header"><span class="robot-icon">◉</span><div><small id="chat-sector">NÚCLEO</small><h2 id="chat-name">H-01</h2></div><span id="chat-status"></span><button type="button" id="chat-close" aria-label="Encerrar conversa">×</button></header>
     <div class="chat-messages" id="chat-messages" role="log" aria-live="polite" aria-relevant="additions"></div>
+    <p id="chat-queue" class="chat-queue" role="status" hidden></p>
+    <form id="chat-login" class="chat-login" hidden><label for="chat-password">Acesso privado ao Hermes</label><div><input id="chat-password" type="password" autocomplete="current-password" placeholder="Senha do chat" required><button type="submit">Entrar</button></div><small id="chat-login-note">As perguntas ficam na fila mesmo se você fechar a página.</small></form>
     <div class="chat-suggestions"><button type="button" data-question="O que você está fazendo agora?">O que está fazendo?</button><button type="button" data-question="O que você representa?">Qual é sua função?</button><button type="button" data-question="Quais dados você tem?">Ver dados</button><button type="button" data-question="Há alguma falha?">Ver falhas</button></div>
     <form id="chat-form"><label class="sr-only" for="chat-input">Pergunte ao robô</label><input id="chat-input" maxlength="500" autocomplete="off" placeholder="Pergunte sobre esta estação…" required><button type="submit" aria-label="Enviar pergunta">↑</button></form>
-    <p class="chat-footnote"><span id="chat-kind"></span> · conversa baseada em telemetria</p>
+    <p class="chat-footnote"><span id="chat-kind"></span> · <span id="chat-mode">conversa baseada em telemetria</span></p>
   </section>
   <noscript><div class="fallback glass"><h1>Ative JavaScript para entrar no laboratório.</h1><a href="/dashboard">Abrir dashboard ↗</a></div></noscript>
 </main>

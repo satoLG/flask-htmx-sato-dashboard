@@ -7,6 +7,7 @@ const name = id => SECTORS.find(s => s[0] === id)?.[1] || 'EXPLORANDO';
 const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text !== undefined) el.textContent = text; return el; };
 const clock = value => { const d = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(String(value)) ? value : `${String(value).replace(' ','T')}Z`); return Number.isNaN(+d) ? '—' : d.toLocaleTimeString('pt-BR'); };
 let scene = null, state = null, sector = 'hermes', selectedRobot = null, inFlight = false, timer = null, lastSuccess = 0, chatBusy = false, toastTimer;
+let webChatMode='loading',webChatCsrf=null,chatPollTimer=null;
 const histories = new Map();
 const ragUI=createRagUI(()=>scene,fetchJSON);
 function toast(text) { clearTimeout(toastTimer); $('toast').textContent = text; $('toast').hidden = false; toastTimer = setTimeout(() => $('toast').hidden = true, 3500); }
@@ -71,6 +72,44 @@ function messages() {
     if (entry.source) el.append(node('small','',`${entry.source} · ${clock(entry.when)}${entry.catalog ? ` · catálogo ${clock(entry.catalog)}` : ''}`)); return el;
   })); $('chat-messages').scrollTop = $('chat-messages').scrollHeight;
 }
+function chatMode(mode){
+  webChatMode=mode;
+  $('chat-login').hidden=mode!=='locked';
+  $('chat-form').hidden=mode==='locked'||mode==='loading';
+  document.querySelector('.chat-suggestions').hidden=mode==='locked'||mode==='loading';
+  $('chat-mode').textContent=mode==='private'?'Hermes · perguntas informativas · fila persistente':mode==='local'?'telemetria local':mode==='locked'?'acesso privado ao Hermes':'conectando ao Hermes';
+  if(mode==='locked')$('chat-password').focus({preventScroll:true});
+}
+async function loadChatSession(id){
+  chatMode('loading');
+  try{
+    const info=await fetchJSON('/api/lab/hermes-chat/session');
+    if(selectedRobot!==id)return;
+    if(!info.available){chatMode('local');return;}
+    webChatCsrf=info.csrf;
+    chatMode(info.authenticated?'private':'locked');
+    if(info.authenticated)loadChatHistory(id);
+  }catch{if(selectedRobot===id){chatMode('locked');$('chat-login-note').textContent='Sem conexão com o chat privado. Tente novamente.';}}
+}
+async function loadChatHistory(id){
+  if(webChatMode!=='private')return;
+  clearTimeout(chatPollTimer);
+  try{
+    const data=await fetchJSON(`/api/lab/hermes-chat/history?robot_id=${encodeURIComponent(id)}`);
+    if(selectedRobot!==id)return;
+    const intro=histories.get(id)?.[0];
+    const history=intro?[intro]:[];
+    for(const job of data.jobs){
+      history.push({role:'user',text:job.question,when:new Date(job.created_at*1000).toISOString()});
+      const text=job.status==='done'?job.answer:job.status==='failed'?job.error:job.status==='running'?'Hermes está respondendo…':'Pergunta guardada na fila. Aguardando Hermes…';
+      history.push({role:'robot',text,source:job.status==='done'?'Hermes · sem ferramentas':null,when:new Date(job.updated_at*1000).toISOString()});
+    }
+    histories.set(id,history);messages();
+    const pending=data.jobs.some(j=>j.status==='queued'||j.status==='running');
+    $('chat-queue').hidden=!pending;$('chat-queue').textContent=pending?'Sua pergunta está salva. Você pode sair e voltar; a resposta aparecerá aqui.':'';
+    if(pending)chatPollTimer=setTimeout(()=>loadChatHistory(id),3000);
+  }catch(error){if(selectedRobot===id){$('chat-queue').hidden=false;$('chat-queue').textContent=`Não consegui ler a fila: ${error.message}`;chatPollTimer=setTimeout(()=>loadChatHistory(id),5000);}}
+}
 function openChat(id) {
   const robot = state?.workers.find(w => w.id === id);
   // There is no menu shortcut around proximity. The scene validates again here.
@@ -82,10 +121,10 @@ function openChat(id) {
   $('chat-status').textContent = $('connection').dataset.state === 'offline' ? 'Dados desatualizados' : robot.status_label;
   $('chat-kind').textContent = KINDS[robot.kind];
   if (!histories.has(id)) histories.set(id,[{role:'robot',text:`Olá! Sou ${robot.name}. ${robot.description || robot.detail}${robot.parent_id ? `\nExecução pai: ${robot.parent_id}` : ''}`,source:robot.source,when:state.now}]);
-  messages(); $('chat-close').focus({preventScroll:true});
+  messages(); loadChatSession(id); $('chat-close').focus({preventScroll:true});
 }
 function closeChat() {
-  if (!selectedRobot) return; $('chat').hidden = true; selectedRobot = null; document.body.dataset.chat = 'false';
+  if (!selectedRobot) return; clearTimeout(chatPollTimer);$('chat-queue').hidden=true;$('chat').hidden = true; selectedRobot = null; document.body.dataset.chat = 'false';
   document.querySelectorAll('.hud-top,.hud-bottom,.overlay').forEach(el => el.inert = false);
   scene?.endChat(); $('scene').focus({preventScroll:true});
 }
@@ -100,13 +139,27 @@ document.addEventListener('keydown', e => {
   }
 });
 async function ask(question) {
-  if (!selectedRobot || chatBusy || !question.trim()) return;
+  if (!selectedRobot || chatBusy || !question.trim() || webChatMode==='locked'||webChatMode==='loading') return;
   const id = selectedRobot, history = histories.get(id); history.push({role:'user',text:question.trim()}); messages(); $('chat-input').value = ''; chatBusy = true;
   scene?.emote('question'); document.querySelectorAll('#chat-form button,[data-question]').forEach(el => el.disabled = true);
-  try { const reply = await fetchJSON('/api/lab/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({robot_id:id,question})}); history.push({role:'robot',text:reply.answer,source:reply.source,when:reply.observed_at,catalog:reply.catalog_sampled_at}); if (selectedRobot === id) scene?.emote('answer'); }
+  try {
+    if(webChatMode==='private'){
+      await fetchJSON('/api/lab/hermes-chat/jobs',{method:'POST',headers:{'Content-Type':'application/json','X-Chat-CSRF':webChatCsrf},body:JSON.stringify({robot_id:id,question})});
+      if(selectedRobot===id)await loadChatHistory(id);
+    }else{
+      const reply=await fetchJSON('/api/lab/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({robot_id:id,question})});
+      history.push({role:'robot',text:reply.answer,source:reply.source,when:reply.observed_at,catalog:reply.catalog_sampled_at});
+      if(selectedRobot===id)scene?.emote('answer');
+    }
+  }
   catch (error) { history.push({role:'robot',text:`Não consegui consultar a telemetria. ${error.message}`}); if (selectedRobot === id) scene?.emote('error'); }
   finally { if (history.length > 60) history.splice(0,history.length - 60); chatBusy = false; document.querySelectorAll('#chat-form button,[data-question]').forEach(el => el.disabled = false); if (selectedRobot === id) messages(); }
 }
+$('chat-login').addEventListener('submit',async e=>{
+  e.preventDefault();const password=$('chat-password').value;
+  try{const info=await fetchJSON('/api/lab/hermes-chat/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});$('chat-password').value='';webChatCsrf=info.csrf;chatMode('private');if(selectedRobot)loadChatHistory(selectedRobot);}
+  catch(error){$('chat-login-note').textContent=error.message;}
+});
 $('chat-form').addEventListener('submit', e => { e.preventDefault(); ask($('chat-input').value); });
 document.querySelectorAll('[data-question]').forEach(el => el.addEventListener('click', () => ask(el.dataset.question)));
 $('interaction').addEventListener('click', () => scene?.interact());
