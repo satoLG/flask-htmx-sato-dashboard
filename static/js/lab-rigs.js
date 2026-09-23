@@ -14,63 +14,6 @@ export function createRigFactory(art) {
     const head = bone(spine, 'head', 0, type === 'avatar' ? .84 : 0, 0);
     return {type, root, hips, spine, head, arms: [], legs: [], eyes: [], move: 0, attention: 0, work: .6, phase: 0, greeting: 0};
   }
-  function avatar() {
-    const rig = base('avatar');
-    const skin=mat('#dba875',0,.82),hair=mat('#4a372b',0,.85),shirt=mat('#304551',0,.88),denim=mat('#50738a',0,.9);
-    // Rounded, continuous solids for clothing and limbs; no overlapping clumps.
-    function rounded(parent,w,h,d,material,x,y,z,r=.045){
-      const s=new T.Shape(),l=-w/2,b=-h/2;
-      s.moveTo(l+r,b);s.lineTo(l+w-r,b);s.quadraticCurveTo(l+w,b,l+w,b+r);s.lineTo(l+w,b+h-r);s.quadraticCurveTo(l+w,b+h,l+w-r,b+h);s.lineTo(l+r,b+h);s.quadraticCurveTo(l,b+h,l,b+h-r);s.lineTo(l,b+r);s.quadraticCurveTo(l,b,l+r,b);
-      const g=new T.ExtrudeGeometry(s,{depth:d-.04,bevelEnabled:true,bevelThickness:.02,bevelSize:.018,bevelSegments:2,steps:1,curveSegments:5});
-      g.translate(0,0,-(d-.04)/2);return mesh(parent,g,material,x,y,z);
-    }
-    rounded(rig.spine,.7,.66,.43,shirt,0,.34,0,.1);
-    cylinder(rig.spine,.13,.2,skin,0,.75,0);
-    const collar=ring(rig.spine,.147,.022,'#20323e',0,.687,0,true);collar.scale.z=.83;
-    // The head, hair and beard share one ellipsoid, so their surfaces meet cleanly.
-    sphere(rig.head,1,skin,0,.22,0,[.46,.5,.405]);
-    function scalp(material,amin,amax,top,bottom,offset){
-      const vertices=[],indices=[],cols=40,rows=16;
-      for(let j=0;j<=rows;j++)for(let i=0;i<=cols;i++){
-        const a=amin+(amax-amin)*i/cols,v=top(a)+(bottom(a)-top(a))*j/rows;
-        const sweep=amin===-Math.PI?.075*Math.sin(v)*Math.max(0,Math.cos(a+.6)):0;
-        vertices.push((.46+offset)*Math.sin(v)*Math.sin(a)+sweep*.2,.22+(.5+offset)*Math.cos(v)+sweep,(.405+offset)*Math.sin(v)*Math.cos(a));
-      }
-      for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){const n=j*(cols+1)+i;indices.push(n,n+1,n+cols+1,n+1,n+cols+2,n+cols+1);}
-      const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));g.setIndex(indices);g.computeVertexNormals();
-      const m=material.clone();m.side=T.DoubleSide;return mesh(rig.head,g,m);
-    }
-    scalp(hair,-Math.PI,Math.PI,()=>.001,a=>1.27+.84*(1-Math.cos(a))/2+.13*Math.sin(a*3)*Math.max(0,Math.cos(a)),.026);
-    scalp(hair,-1.4,1.4,a=>2.08-.36*Math.abs(a)/1.4,()=>2.79,.008);
-    for(const side of [-1,1]){
-      sphere(rig.head,1,skin,side*.455,.22,0,[.07,.12,.075]);
-      const eye=new T.Group();eye.position.set(side*.175,.28,.39);rig.head.add(eye);rig.eyes.push(eye);
-      sphere(eye,.075,'#fff8e8',0,0,0,[1,1.25,.38]);sphere(eye,.048,'#352e2b',0,0,.027,[1,1.27,.5]);sphere(eye,.014,'#ffffff',-.014,.024,.05);
-      box(rig.head,.195,.022,.025,hair,side*.175,.426,.35).rotation.z=side*-.08;
-      for(const y of [.173,.405])rounded(rig.head,.295,.026,.033,mat('#243d4c'),side*.183,y,.417,.011);
-      for(const x of [side*.183-.144,side*.183+.144])rounded(rig.head,.027,.244,.033,mat('#243d4c'),x,.289,.417,.012);
-      rod(rig.head,[side*.33,.386,.408],[side*.451,.35,.02],.014,mat('#243d4c'));
-      const arm=bone(rig.spine,side<0?'shoulder_L':'shoulder_R',side*.37,.58,0);
-      const sleeve=cylinder(arm,.12,.22,shirt,0,-.09,0,.14);sleeve.scale.z=.9;
-      cylinder(arm,.089,.24,skin,0,-.24,0,.099);
-      const elbow=bone(arm,'elbow',0,-.34,0);cylinder(elbow,.078,.29,skin,0,-.125,0,.089);
-      rounded(elbow,.16,.18,.145,skin,0,-.31,.012,.065);rig.arms.push({upper:arm,lower:elbow,side});
-      const leg=bone(rig.hips,side<0?'hip_L':'hip_R',side*.17,0,0);
-      rounded(leg,.285,.44,.31,denim,0,-.205,0,.055);
-      const knee=bone(leg,'knee',0,-.42,0);rounded(knee,.263,.39,.285,denim,0,-.18,0,.045);
-      const ankle=bone(knee,'ankle',0,-.38,0);rounded(ankle,.28,.18,.43,mat('#69513d'),0,-.015,.07,.065);
-      rounded(ankle,.29,.035,.45,mat('#b9ac8e'),0,-.096,.07,.035);
-      for(const z of [.02,.09])box(ankle,.15,.015,.021,'#c8bba0',0,.078,z);
-      rig.legs.push({upper:leg,lower:knee,ankle,side});
-    }
-    rounded(rig.hips,.57,.13,.33,denim,0,-.005,0,.04);
-    box(rig.head,.087,.024,.033,'#243d4c',0,.33,.424);
-    sphere(rig.head,.063,skin,0,.16,.403,[.85,.73,.9]);
-    const smile=mesh(rig.head,new T.TorusGeometry(.103,.014,6,24,Math.PI),mat('#fff0dd'),0,-.004,.365);smile.rotation.z=Math.PI;smile.scale.y=.48;
-    for(const side of [-1,1]){const brow=box(rig.head,.106,.021,.018,hair,side*.053,.06,.385);brow.rotation.z=side*.17;}
-    rig.root.rotation.y=.65;return rig;
-  }
-
   function robot() {
     const rig = base('robot');
     sphere(rig.spine, .54, '#e3e8df', 0, 0, 0, [1.08, .96, .98]);
@@ -116,7 +59,7 @@ export function createRigFactory(art) {
     batchRobot(rig);
     return rig;
   }
-  return {avatar, robot};
+  return {robot};
 }
 
 const damp = (a, b, dt, rate = 6) => a + (b - a) * (1 - Math.exp(-rate * dt));

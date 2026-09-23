@@ -2,10 +2,11 @@ import * as T from '../vendor/three.module.min.js';
 import {createInstallations} from './lab-installations.js';
 import {createRagDome} from './lab-rag.js';
 import {batchStatic} from './lab-batch.js';
+import {loadSatoAvatar} from './lab-avatar.js';
 import {createRigFactory, poseRig, dampAngle} from './lab-rigs.js';
 import {canStand, findPath, nearestFree, moveWithCollision} from './lab-navigation.js';
 
-// Procedural models: no game assets, remote fonts, textures, or model downloads.
+// Local assets only: the supplied Sato GLB and procedural lab/robots.
 const ZONES = {
   hermes: {x: 0, z: 0, color: '#56d5c3'}, models: {x: -10, z: -6, color: '#e9ab61'},
   mcp: {x: 0, z: -7.5, color: '#6ccce0'}, rag: {x: 10, z: -6, color: '#83cbb3'},
@@ -15,7 +16,8 @@ const ZONES = {
 const LIVE = new Set(['recent', 'running', 'process']);
 const NAMES = {hermes:'NÚCLEO',models:'PROVIDERS',mcp:'MCP',rag:'RAG',memory:'SKILLS',cron:'CRON',vm:'VM'};
 
-export function createLabScene(container, callbacks) {
+export async function createLabScene(container, callbacks) {
+  const hero = await loadSatoAvatar();
   const renderer = new T.WebGLRenderer({antialias: true, alpha: false, powerPreference: 'high-performance'});
   let pixelRatio=Math.min(devicePixelRatio,1.35),qualityFrames=0,qualityElapsed=0;
   renderer.setPixelRatio(pixelRatio);
@@ -259,7 +261,7 @@ export function createLabScene(container, callbacks) {
   batchStatic(world);
 
   const factory = createRigFactory({box,sphere,cylinder,ring,rod,mesh,mat,glow,geo});
-  const hero = factory.avatar(), avatar = hero.root; avatar.position.set(-4,.13,4); avatar.scale.setScalar(1.12); world.add(avatar);
+  const avatar = hero.root; avatar.position.set(-4,.13,4); avatar.scale.setScalar(1.12); world.add(avatar);
   const destination = ring(world,.27,.023,glow('#c6f0f7'),0,.16,0,true); destination.visible=false;
   let study=false,savedStudyCamera=null;
   let cameraMode='follow', savedCamera=null, chatId=null, desiredRobot=null, route=[], location=null, candidate=null, emoteUntil=0;
@@ -313,7 +315,7 @@ export function createLabScene(container, callbacks) {
     if(route.length)route=findPath(avatar.position,route.at(-1),obstacles,circles);
     if(chatId&&!robots.has(chatId))endChat();
   }
-  function stopWalking(){keys.clear();route=[];destination.visible=false;dirty=true;}
+  function stopWalking(){keys.clear();route=[];movementSpeed=0;destination.visible=false;dirty=true;}
   function navigate(point){if(chatId||study)return false;const next=findPath(avatar.position,point,obstacles,circles);if(!next.length){callbacks.onToast('Não encontrei um caminho livre até esse ponto.');return false;}route=next;destination.position.set(next.at(-1).x,groundAt(next.at(-1).x,next.at(-1).z)+.025,next.at(-1).z);destination.visible=true;dirty=true;return true;}
   function approach(item){
     const center=item.rig.root.position,options=[];
@@ -369,7 +371,8 @@ export function createLabScene(container, callbacks) {
   container.addEventListener('keydown',e=>{if(chatId||study)return;const key=e.key.length===1?e.key.toLowerCase():e.key;if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)){e.preventDefault();keys.add(key);route=[];}if(key==='e'){e.preventDefault();interact();}});
   window.addEventListener('keyup',e=>keys.delete(e.key.length===1?e.key.toLowerCase():e.key));window.addEventListener('blur',stopWalking);container.addEventListener('blur',()=>keys.clear());
   const resizeObserver=new ResizeObserver(()=>{const r=container.getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(study)targetRadius=camera.aspect>.85?13:20;else if(cameraMode==='room'&&!chatId)targetRadius=Math.max(44,43/camera.aspect);dirty=true;});resizeObserver.observe(container);
-  const direction=new T.Vector3();let previousLocation='',previousCandidate='';
+  const direction=new T.Vector3(),travelDirection=new T.Vector3();
+  let movementSpeed=0,previousLocation='',previousCandidate='';
   function frame(ms){
     requestAnimationFrame(frame);if(ms-lastTime<1000/30)return;
     const elapsed=Math.min((ms-lastTime)/1000,.25),dt=elapsed;lastTime=ms;if(document.hidden||contextLost)return;
@@ -378,16 +381,23 @@ export function createLabScene(container, callbacks) {
     if(!paused)animationTime+=dt;
     let x=0,z=0;if(keys.has('w')||keys.has('ArrowUp'))z--;if(keys.has('s')||keys.has('ArrowDown'))z++;if(keys.has('a')||keys.has('ArrowLeft'))x--;if(keys.has('d')||keys.has('ArrowRight'))x++;
     direction.set(x*Math.cos(azimuth)+z*Math.sin(azimuth),0,z*Math.cos(azimuth)-x*Math.sin(azimuth));
-    let step=dt*3.8;
+    let remaining=Infinity;
     if(!keys.size&&route.length){
       while(route.length&&dist(avatar.position,route[0])<.08)route.shift();
-      if(route.length){direction.set(route[0].x-avatar.position.x,0,route[0].z-avatar.position.z);step=Math.min(step,direction.length());}
-      else direction.set(0,0,0);
+      if(route.length){direction.set(route[0].x-avatar.position.x,0,route[0].z-avatar.position.z);remaining=direction.length();}
+      else {direction.set(0,0,0);movementSpeed=0;}
     }
+    const wantsToMove=direction.lengthSq()>.001;
+    const desiredSpeed=wantsToMove?2.7*(route.length===1?Math.min(1,remaining/.45):1):0;
+    movementSpeed=T.MathUtils.damp(movementSpeed,desiredSpeed,wantsToMove?8:12,dt);
+    if(movementSpeed<.005)movementSpeed=0;
+    if(wantsToMove)travelDirection.copy(direction).normalize();
+    else if(movementSpeed)direction.copy(travelDirection);
+    const step=Math.min(dt*movementSpeed,remaining);
     const before={x:avatar.position.x,z:avatar.position.z};
     if(!chatId&&direction.lengthSq()>.001){direction.normalize();const next=moveWithCollision(avatar.position,direction.x*step,direction.z*step,obstacles,circles);avatar.position.x=next.x;avatar.position.z=next.z;if(dist(before,next)<.001&&route.length){route=findPath(avatar.position,route.at(-1),obstacles,circles);}}
     const moving=dist(before,avatar.position)>.001;
-    if(moving)avatar.rotation.y=dampAngle(avatar.rotation.y,Math.atan2(direction.x,direction.z),dt,12);
+    if(moving)avatar.rotation.y=dampAngle(avatar.rotation.y,Math.atan2(avatar.position.x-before.x,avatar.position.z-before.z),dt,12);
     avatar.position.y=T.MathUtils.lerp(avatar.position.y,groundAt(avatar.position.x,avatar.position.z),1-Math.exp(-dt*10));
     destination.visible=route.length>0&&!chatId;
     location=Object.keys(ZONES).find(id=>inside(id))||null;candidate=null;let nearest=2.05;
@@ -403,9 +413,8 @@ export function createLabScene(container, callbacks) {
     aim.lerp(target,1-Math.exp(-elapsed*5));radius=T.MathUtils.lerp(radius,targetRadius,1-Math.exp(-elapsed*5));azimuth=dampAngle(azimuth,targetAzimuth,elapsed,6);elevation=T.MathUtils.lerp(elevation,targetElevation,1-Math.exp(-elapsed*5));
     camera.position.set(aim.x+Math.sin(azimuth)*Math.cos(elevation)*radius,aim.y+Math.sin(elevation)*radius,aim.z+Math.cos(azimuth)*Math.cos(elevation)*radius);camera.lookAt(aim);
     if(emoteUntil&&ms>emoteUntil){hero.bubble.visible=false;for(const item of robots.values())item.rig.bubble.visible=false;emoteUntil=0;dirty=true;}
-    if(!dirty&&paused&&!moving&&!wasMoving&&!changing)return;dirty=false;wasMoving=moving;
-    const interacting=chatId?robots.get(chatId):candidate;
-    poseRig(hero,animationTime,dt,{speed:moving?1:0,attention:interacting?1:0,talk:!!chatId,lookYaw:0,reduced:paused});
+    if(!dirty&&paused&&!moving&&!wasMoving&&!changing&&!hero.transitioning)return;dirty=false;wasMoving=moving;
+    hero.update(dt,{speed:dist(before,avatar.position)/dt,reduced:paused});
     for(const item of robots.values()){
       const rig=item.rig,attention=inside(item.worker.sector)&&(item.worker.kind!=='catalog'||chatId===item.worker.id||animationTime<rig.greeting)?1:0;
       const look=Math.atan2(avatar.position.x-rig.root.position.x,avatar.position.z-rig.root.position.z);

@@ -18,7 +18,8 @@ Abra `/lab` pelo link **Laboratório 3D** no dashboard ou na página inicial.
 É uma segunda visualização do mesmo host e das mesmas fontes do Hermes: não
 precisa de outro serviço, Node.js em produção ou conexão com CDN. Three.js
 0.180.0 e sua licença MIT estão em `static/vendor/`; o cenário e os personagens
-são modelos procedurais originais, sem arquivos extraídos dos jogos de referência.
+são locais. O avatar usa o GLB fornecido pelo dono do repositório; cenário e robôs
+são procedurais, sem arquivos extraídos dos jogos de referência.
 
 - Setores: núcleo Hermes (agentes, subagentes e tools), providers, MCP, RAG,
   memória/skills, cron e infraestrutura. As linhas do piso representam a
@@ -38,8 +39,11 @@ são modelos procedurais originais, sem arquivos extraídos dos jogos de referê
   responsável e três bancadas auxiliares. Selecionar outro robô na lista reserva
   uma bancada para ele; a lista contém todos os robôs incluídos no snapshot.
   Os monitores mostram dados reais, nome e estado do trabalhador daquela bancada.
-- Avatar e robôs têm hierarquias de ossos com poses procedurais: respiração,
-  mudança de apoio, piscar, andar coordenado e gestos. Robôs operam seus terminais
+- O avatar usa `static/models/sato.glb`, com o idle original (12,29 s) e um
+  ciclo de caminhada (0,88 s), misturados suavemente ao iniciar/parar. A cadência
+  acompanha a velocidade real, com aceleração e desaceleração. Detalhes e
+  regeneração em `static/models/README.md`. Robôs mantêm poses procedurais
+  de respiração, apoio, piscar e gestos; operam seus terminais
   e se voltam para quem entra na estação; a pupila central é azul emissiva.
   Esses gestos são ambientação, não evidência de execução. O indicador e os dados
   continuam distinguindo atividade real, dados ausentes e leituras antigas.
