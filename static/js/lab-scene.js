@@ -22,7 +22,7 @@ export async function createLabScene(container, callbacks) {
   let pixelRatio=Math.min(devicePixelRatio,1.35),qualityFrames=0,qualityElapsed=0;
   renderer.setPixelRatio(pixelRatio);
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
-  renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
+  renderer.shadowMap.autoUpdate = true;
   renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
   container.append(renderer.domElement);
   const world = new T.Scene(); world.background = new T.Color('#c4d2cc');
@@ -31,7 +31,7 @@ export async function createLabScene(container, callbacks) {
   const aim = new T.Vector3(-4, 1, 4), target = aim.clone();
   let azimuth = .55, elevation = .64, radius = 14, targetRadius = 14, paused = false, stale = false;
   let latestData = null, lastTime = 0, animationTime = 0, lastPosition = 0;
-  let dirty = true, lastShadow = 0;
+  let dirty = true;
   const keys = new Set(), robots = new Map(), zones = new Map(), hitObjects = [], obstacles = [];
   const mats = new Map(), geometries = new Map();
   const mat = (color, metalness = .1, roughness = .65) => {
@@ -425,8 +425,7 @@ export async function createLabScene(container, callbacks) {
     }
     if(!paused)for(const part of machineParts){if(dist(avatar.position,part.position)<13)part.object.rotation.y=animationTime*.65+part.slot;}
     if(ms-lastPosition>150){callbacks.onPosition(avatar.position.x,avatar.position.z);lastPosition=ms;}
-    // Static room shadows are cached; update actors at a lower cadence.
-    if(ms-lastShadow>700&&moving){renderer.shadowMap.needsUpdate=true;lastShadow=ms;}
+    // Shadow maps update on every rendered frame, including idle and turns.
     installations.tick(animationTime,dt,paused);ragDome.tick(animationTime,camera);
     renderer.render(world,camera);
   }

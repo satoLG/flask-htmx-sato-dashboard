@@ -39,8 +39,8 @@ são procedurais, sem arquivos extraídos dos jogos de referência.
   responsável e três bancadas auxiliares. Selecionar outro robô na lista reserva
   uma bancada para ele; a lista contém todos os robôs incluídos no snapshot.
   Os monitores mostram dados reais, nome e estado do trabalhador daquela bancada.
-- O avatar usa `static/models/sato.glb`, com o idle original (12,29 s) e um
-  ciclo de caminhada (0,88 s), misturados suavemente ao iniciar/parar. A cadência
+- O avatar usa `static/models/sato.glb`, com idle ancorado (4,8 s),
+  caminhada (0,92 s) e piscar independente. As poses se misturam ao iniciar/parar. A cadência
   acompanha a velocidade real, com aceleração e desaceleração. Detalhes e
   regeneração em `static/models/README.md`. Robôs mantêm poses procedurais
   de respiração, apoio, piscar e gestos; operam seus terminais
@@ -48,7 +48,7 @@ são procedurais, sem arquivos extraídos dos jogos de referência.
   Esses gestos são ambientação, não evidência de execução. O indicador e os dados
   continuam distinguindo atividade real, dados ausentes e leituras antigas.
   A cena limita a 30 fps, agrupa geometria estática, reaproveita materiais e
-  atualiza sombras em cadência reduzida. Há pausa de animações no mapa e respeito
+  atualiza as sombras reais a cada frame renderizado. Há pausa de animações no mapa e respeito
   à preferência de movimento reduzido do sistema.
 - Dados ausentes aparecem como **sem telemetria**, nunca como uma execução
   fictícia. **Atividade recente** significa um evento nos últimos 180 segundos;
