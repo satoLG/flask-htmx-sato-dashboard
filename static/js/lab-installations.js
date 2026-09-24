@@ -13,7 +13,7 @@ export function createInstallations(world,zones,art){
   const instruments=new T.Group();world.add(instruments);
   const gauges=[];
   for(const [i,label,color] of [[-1,'CPU','#63e5ff'],[1,'RAM','#a6f08a']]){
-    const g=new T.Group();g.position.set(i*1.65,.4,6.1);instruments.add(g);
+    const g=new T.Group();g.position.set(i*1.65,.4,zones.get('vm').group.position.z-1.9);instruments.add(g);
     box(g,1.25,3.95,.38,'#26474b',0,1.85,0);box(g,1.04,3.7,.06,'#10272e',0,1.9,.22);
     const segments=[];for(let j=0;j<14;j++)segments.push(box(g,.8,.135,.085,'#2e494c',0,.35+j*.165,.27));
     textPlane(g,label,1.05,.38,0,3.51,.261,{color:'#e0fffb',background:'#10272e',size:157});
@@ -61,8 +61,8 @@ export function createInstallations(world,zones,art){
   });}
   memoryLines=['Aguardando catálogo…'];paintChalk();
 
-  box(world,25,3.95,.25,'#244347',0,6.4,-12.88);
-  const activity=surface(world,24.55,3.57,0,6.4,-12.735,2048,360);
+  box(world,25,3.95,.25,'#244347',0,6.4,-30.6);
+  const activity=surface(world,24.55,3.57,0,6.4,-30.45,2048,360);
   function updateHeatmap(payload){
     activity.paint((ctx,w,h)=>{
       ctx.fillStyle='#102e32';ctx.fillRect(0,0,w,h);ctx.fillStyle='#d9f8df';ctx.font='bold 49px monospace';ctx.fillText('ATIVIDADE DO HERMES',42,59);

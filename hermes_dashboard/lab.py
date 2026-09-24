@@ -9,9 +9,10 @@ import time
 import unicodedata
 from datetime import datetime, timezone
 
-from . import activity, config, cron, db, mcp, memory, rag, stats, vm
+from . import activity, config, cron, db, mcp, memory, rag, stats, vm, gateways
 
 SECTORS = [
+    ("gateway", "Recepção de gateways", "G-00", "Recebo as entradas do Hermes. Cada atendente representa um adaptador conectado ou o endpoint de prompts do dashboard; pacotes na esteira ilustram o fluxo da arquitetura.", "gateway_state.json · dashboard"),
     ("hermes", "Núcleo Hermes", "H-01", "Coordeno a leitura de agentes, subagentes e ferramentas. Cada robô de execução corresponde a um registro ou processo observado.", "events.db · agent_runs / subagent_runs / tool_calls"),
     ("models", "Providers", "P-02", "Represento o roteamento de modelos: provider principal e fallbacks configurados, incluindo OpenRouter e OpenCode quando presentes.", "config.yaml · model_usage"),
     ("mcp", "Conexões MCP", "M-03", "Represento a ponte entre o Hermes e os servidores MCP. Uma configuração não comprova que o servidor está conectado.", "config.yaml · tool_calls"),
@@ -136,6 +137,7 @@ def snapshot():
     catalogs = _catalogs()
     machine = _safe(lambda: vm.snapshot(with_breakdown=False))
     workers, warnings = _runs()
+    entrances = gateways.snapshot()
     events = [dict(e, sector=event_sector(e)) for e in live.get("events", [])]
     # A clean host must not look like an idle, successfully connected Hermes.
     event_available = bool(activity.available_kinds()) and not live.get("error")
@@ -145,7 +147,10 @@ def snapshot():
         data = catalogs.get(sector, {})
         errors = [str(v) for k, v in data.items() if k.endswith("error") and v]
         facts = []
-        if sector == "hermes":
+        if sector == "gateway":
+            facts = [f"{len(entrances)} entradas observadas"] + [e["name"] for e in entrances]
+            state = "observed" if entrances else "unknown"
+        elif sector == "hermes":
             facts = [f"{len(live.get('processes', []))} processos detectados", f"{len(workers)} registros de agentes/subagentes (até 48 por tabela)"]
         elif sector == "models":
             facts = [f"Principal: {data.get('primary', 'desconhecido')}"]
@@ -173,6 +178,10 @@ def snapshot():
                                source, description=description, facts=facts, errors=errors))
 
     # Fixed catalog attendants are explicit visual roles, never invented agent runs.
+    for entrance in entrances:
+        workers.append(_worker(f"gateway:{entrance['id']}", entrance["name"], "gateway", "gateway",
+                               entrance["status"], entrance["detail"], entrance["source"],
+                               description="Sou o atendente visual desta entrada, não uma execução de agente."))
     archives = catalogs["memory"]
     for archive_id, name, entries in (
         ("skills", "Arquivista de skills", archives.get("skills", [])),
@@ -226,7 +235,7 @@ def snapshot():
             "catalog_sampled_at": catalogs["sampled_at"], "poll_seconds": 5, "window_seconds": 180,
             "sectors": [dict(id=s[0], name=s[1], code=s[2], description=s[3]) for s in SECTORS],
             "workers": workers, "events": events, "warnings": warnings,
-            "connections": [{"from": "hermes", "to": s[0], "kind": "conceptual"} for s in SECTORS[1:]],
+            "connections": [{"from": "gateway", "to": "vm", "kind": "conceptual"}] + [{"from": "hermes", "to": s[0], "kind": "conceptual"} for s in SECTORS if s[0] not in ("hermes", "gateway")],
             "telemetry_available": event_available,
             "visuals": {
                 "providers": {"primary": catalogs["models"].get("primary"),

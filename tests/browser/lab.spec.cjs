@@ -44,10 +44,10 @@ test('full-screen WebGL, walking, camera modes and proximity conversation', asyn
   expect(errors).toEqual([]);
 });
 
-test('all seven stations can be reached around equipment', async ({page}) => {
-  test.setTimeout(240000);
+test('all eight stations can be reached around equipment', async ({page}) => {
+  test.setTimeout(360000);
   await ready(page);
-  for(const id of ['hermes','models','mcp','rag','cron','vm','memory']){
+  for(const id of ['gateway','hermes','models','mcp','rag','cron','vm','memory']){
     await visit(page,id);
     await page.locator('#interaction').click();
     await expect(page.locator('#chat')).toBeVisible();
