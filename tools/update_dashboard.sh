@@ -13,24 +13,27 @@ exec 9>"$lock"
 flock -n 9 || exit 0
 
 cd "$repo" || die "repository not found: $repo"
-[[ $(git branch --show-current) == main ]] || die 'checkout is not on main'
+branch=$(git branch --show-current)
+[[ $branch == main ]] || die "deployment checkout is on ${branch:-detached HEAD}, not main; preserve feature work in a separate worktree before restoring main"
 [[ -z $(git status --porcelain --untracked-files=no) ]] || die 'tracked files have local changes'
 old=$(git rev-parse HEAD)
 
 # Fetch the repository directly; this operation needs Git, not the GitHub API
-# or an inference provider. Short outages are retried without touching the site.
+# or an inference provider. Refresh origin/main too: fetching only FETCH_HEAD
+# leaves Git status reporting already-deployed commits as unpushed local work.
+# Short outages are retried without touching the site.
 fetched=false
 for attempt in 1 2 3; do
-  if timeout 90 git fetch --no-tags "$source_url" refs/heads/main; then
+  if timeout 90 git fetch --no-tags "$source_url" +refs/heads/main:refs/remotes/origin/main; then
     fetched=true
     break
   fi
   [[ $attempt == 3 ]] || sleep $((attempt * 3))
 done
 [[ $fetched == true ]] || die 'could not fetch main after three attempts'
-new=$(git rev-parse FETCH_HEAD)
+new=$(git rev-parse refs/remotes/origin/main)
 [[ $new != "$old" ]] || exit 0
-git merge-base --is-ancestor "$old" "$new" || die 'remote main is not a fast-forward of the deployed version'
+git merge-base --is-ancestor "$old" "$new" || die "deployed main has $(git rev-list --count "$new..$old") commits absent from freshly fetched remote main; preserve them on a branch and review before updating"
 
 # Check the candidate in isolation, while the running checkout stays intact.
 candidate=$(mktemp -d /tmp/hermes-dashboard-update.XXXXXXXX)

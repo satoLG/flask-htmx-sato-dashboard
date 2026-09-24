@@ -120,6 +120,18 @@ não voltar saudável, restaura a revisão anterior. Sem commit novo, não reini
 nem envia notificação. Para alterar o próprio procedimento de atualização,
 atualize também a cópia instalada no Hermes após integrar o PR.
 
+O fetch atualiza também `origin/main`; compare commits somente após esse fetch.
+O checkout de produção deve permanecer na `main`. Desenvolva em outro worktree,
+publique a branch e abra um PR; o proprietário faz o merge. Não troque a branch
+do diretório que o serviço Flask e o cron utilizam.
+
+Atualizar este repositório público não exige token. Para push e PR, confira
+`gh auth status` e o acesso ao repositório antes de concluir que falta credencial.
+Um token configurado no ambiente/MCP do Hermes não implica que o CLI `gh` esteja
+autenticado. Na VM, o `gh` foi autenticado com a credencial existente do Hermes,
+e o Git desse checkout usa `gh auth git-credential`. Nunca imprima tokens nem
+peça que sejam enviados pelo chat.
+
 As variáveis `HERMES_*` continuam sendo as mesmas documentadas abaixo. O
 processo precisa ler os arquivos reais do Hermes para mostrar atividade real;
 rodar em outra máquina mostra os recursos dessa outra máquina.
