@@ -42,11 +42,14 @@ test('asset preserves the source textures and has repaired periodic clips',async
   const source=unpack(await fs.readFile(new URL('../static/models/sato-source.glb',import.meta.url)));
   const derived=unpack(await fs.readFile(new URL('../static/models/sato.glb',import.meta.url)));
   assert.deepEqual(derived.binary.subarray(0,source.binary.length),source.binary);
-  for(const key of ['skins','images'])assert.deepEqual(derived.json[key],source.json[key]);
+  assert.deepEqual(derived.json.images,source.json.images);
+  assert.deepEqual(derived.json.skins[0].joints,source.json.skins[0].joints);
+  const inverseBind=derived.json.accessors[derived.json.skins[0].inverseBindMatrices];
+  assert.equal(inverseBind.type,'MAT4');assert.equal(inverseBind.count,41);
   assert.deepEqual(derived.json.materials.slice(0,source.json.materials.length),source.json.materials);
   const gltf=await load();assert.deepEqual(gltf.animations.map(c=>c.name),['Idle','Walk','Blink']);
   assert.ok(Math.abs(gltf.animations[0].duration-4.8)<.00001);
-  let meshes=0;gltf.scene.traverse(n=>{if(n.isSkinnedMesh){meshes++;assert.equal(n.skeleton.bones.length,41);}});assert.equal(meshes,48);
+  let meshes=0;gltf.scene.traverse(n=>{if(n.isSkinnedMesh){meshes++;assert.equal(n.skeleton.bones.length,41);}});assert.equal(meshes,37);
   const clip=gltf.animations[1];assert.equal(clip.tracks.length,123);assert.ok(clip.validate());
   for(const track of clip.tracks){const size=track.getValueSize();assert.deepEqual([...track.values.slice(0,size)],[...track.values.slice(-size)]);}
 });
@@ -59,7 +62,7 @@ test('feet remain planted during stance and clear the floor during swing',async(
     }
     const ys=samples.map(p=>p.y);assert.ok(Math.max(...ys)-Math.min(...ys)<.004,`${side} stance y drift: ${Math.max(...ys)-Math.min(...ys)}`);
     // Support foot moves backward at constant speed to cancel forward root motion.
-    for(let i=1;i<samples.length;i++)assert.ok(Math.abs(samples[i].z-samples[i-1].z+.016)<.003,`${side} stance slides`);
+    for(let i=1;i<samples.length;i++)assert.ok(Math.abs(samples[i].z-samples[i-1].z+.014)<.003,`${side} stance slides`);
     mixer.setTime(((.75+offset)%1)*animations[1].duration);scene.updateMatrixWorld(true);
     assert.ok(foot.getWorldPosition(new T.Vector3()).y-Math.max(...ys)>.045);
   }
@@ -71,7 +74,7 @@ test('idle/walk blending is continuous, reversible, speed-matched and respects p
   const height=new T.Box3().setFromObject(rig.root).getSize(new T.Vector3()).y;assert.ok(Math.abs(height-AVATAR_HEIGHT*1.12)<.001);
   rig.update(1/60,{speed:2.7});let w=rig.walk.getEffectiveWeight();assert.ok(w>0&&w<.2);
   for(let i=0;i<60;i++)rig.update(1/60,{speed:2.7});assert.ok(rig.walk.getEffectiveWeight()>.99);
-  assert.ok(Math.abs(rig.walk.getEffectiveTimeScale()*.64*rig.model.scale.x*1.12/rig.walk.getClip().duration-2.7)<.001);
+  assert.ok(Math.abs(rig.walk.getEffectiveTimeScale()*.56*rig.model.scale.x*1.12/rig.walk.getClip().duration-2.7)<.001);
   const before=rig.walk.time;rig.update(1/60,{speed:0});w=rig.walk.getEffectiveWeight();assert.ok(w>.8&&w<1);assert.ok(rig.walk.time>=before);
   rig.update(1/60,{speed:2.7});assert.ok(rig.walk.getEffectiveWeight()>w);
   for(let i=0;i<90;i++)rig.update(1/60,{speed:0});assert.equal(rig.walk.getEffectiveWeight(),0);

@@ -23,7 +23,7 @@ export function createSatoAvatar({scene,animations,parser}){
   const model=new T.Group();model.scale.setScalar(scale);
   model.position.y=-bounds.min.y*scale;model.add(scene);root.add(model);
   scene.traverse(object=>{if(object.isMesh){object.castShadow=true;object.receiveShadow=true;if(object.isSkinnedMesh)object.frustumCulled=false;}});
-  const cycleDistance=parser?.json.extras?.sato?.walkCycleDistance ?? .64;
+  const cycleDistance=parser?.json.extras?.sato?.walkCycleDistance ?? .56;
   let blend=0;
   return {
     type:'sato',root,model,mixer,idle,walk,blink,
