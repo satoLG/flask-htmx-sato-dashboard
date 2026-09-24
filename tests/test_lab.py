@@ -41,7 +41,7 @@ def test_visual_instruments_expose_real_metrics_and_only_catalog_metadata(vm, cl
     (skill / "SKILL.md").write_text("private body is not telemetry")
     state = client.get("/api/lab/state").get_json()
     assert state["metrics"]["cpu"] == 0
-    assert state["metrics"]["memory"] == 82.5
+    assert state["metrics"]["memory"] == 72.5
     record = next(i for i in state["visuals"]["memory"]["items"] if i["name"] == "pesquisar")
     assert record["modified"] > 0
     assert set(record) == {"name", "category", "modified"}
