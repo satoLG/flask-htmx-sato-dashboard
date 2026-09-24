@@ -31,7 +31,7 @@ export function repairSkin(scene){
   function skin(p){
     let weights;
     if(p[1]<.445){
-      const side=p[0]>0?'L':'R',knee=side==='L'?.2311:.2288;
+      const side=p[0]>0?'L':'R',knee=.2288;
       const foot=1-T.MathUtils.smoothstep(p[1],.075,.115);
       const thigh=T.MathUtils.smoothstep(p[1],knee-.036,knee+.036);
       const pelvis=T.MathUtils.smoothstep(p[1],.355,.435);
