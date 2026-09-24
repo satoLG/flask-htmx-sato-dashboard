@@ -2,7 +2,7 @@ export function createRagUI(getScene,fetchJSON){
   const $=id=>document.getElementById(id),catalog=new Map();let open=false,generation=0,loaded=false;
   const message=text=>$('rag-summary').textContent=text;
   function showNode(n){
-    getScene()?.selectRagNode(n.id);$('rag-node-title').textContent=n.label||n.id;
+    getScene()?.selectRagNode(n.id);document.querySelectorAll('.rag-node').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.node===n.id))); $('rag-node-title').textContent=n.label||n.id;
     $('rag-node-detail').textContent=[n.repo,n.doc_type,n.count!==undefined?`${n.count} documentos`:null,n.distance!==undefined?`Distância vetorial: ${Number(n.distance).toFixed(4)}`:null,n.preview].filter(Boolean).join('\n\n')||'Selecione um ramo para ver seus documentos.';
   }
   function render(nodes){

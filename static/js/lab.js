@@ -1,9 +1,9 @@
 // The canvas owns space and interaction. These overlays only present telemetry.
 import {createRagUI} from './lab-rag-ui.js';
 const $ = id => document.getElementById(id);
-const SECTORS = [['hermes','NÚCLEO','◎'],['models','PROVIDERS','⤨'],['mcp','MCP','⌘'],['rag','RAG','▥'],['memory','SKILLS','◈'],['cron','CRON','◷'],['vm','VM','▤']];
-const KINDS = {guide:'Responsável pela estação',agent:'Agente',subagent:'Subagente',process:'Processo da VM',service:'Servidor MCP',job:'Cron job',catalog:'Representação do catálogo'};
-const name = id => SECTORS.find(s => s[0] === id)?.[1] || 'EXPLORANDO';
+const SECTORS = [['gateway','GATEWAYS','↪'],['hermes','NÚCLEO','◎'],['models','PROVIDERS','⤨'],['mcp','MCP','⌘'],['rag','RAG','▥'],['memory','SKILLS','◈'],['cron','CRON','◷'],['vm','VM','▤']];
+const KINDS = {gateway:'Atendente de gateway',guide:'Responsável pela estação',agent:'Agente',subagent:'Subagente',process:'Processo da VM',service:'Servidor MCP',job:'Cron job',catalog:'Representação do catálogo'};
+const name = id => SECTORS.find(s => s[0] === id)?.[1] || 'CAMPUS / EXPLORANDO';
 const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text !== undefined) el.textContent = text; return el; };
 const clock = value => { const d = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(String(value)) ? value : `${String(value).replace(' ','T')}Z`); return Number.isNaN(+d) ? '—' : d.toLocaleTimeString('pt-BR'); };
 let scene = null, state = null, sector = 'hermes', selectedRobot = null, inFlight = false, timer = null, lastSuccess = 0, chatBusy = false, toastTimer;
@@ -67,6 +67,7 @@ async function poll() {
 }
 document.addEventListener('visibilitychange', () => { clearTimeout(timer); scene?.stopWalking(); if (!document.hidden) { if (lastSuccess && Date.now() - lastSuccess > 15000) scene?.setStale(true); poll(); } });
 function messages() {
+  scene?.setChatMessages(histories.get(selectedRobot)||[],state?.workers.find(w=>w.id===selectedRobot)?.name||'Hermes');
   $('chat-messages').replaceChildren(...(histories.get(selectedRobot) || []).map(entry => {
     const el = node('div',`message ${entry.role}`,entry.text);
     if (entry.source) el.append(node('small','',`${entry.source} · ${clock(entry.when)}${entry.catalog ? ` · catálogo ${clock(entry.catalog)}` : ''}`)); return el;
@@ -162,6 +163,9 @@ $('chat-login').addEventListener('submit',async e=>{
 });
 $('chat-form').addEventListener('submit', e => { e.preventDefault(); ask($('chat-input').value); });
 document.querySelectorAll('[data-question]').forEach(el => el.addEventListener('click', () => ask(el.dataset.question)));
+$('enter-lab').addEventListener('click',()=>visit('guide:gateway'));
+$('sound-toggle').addEventListener('click',async()=>{const on=await scene?.toggleAudio();$('sound-toggle').setAttribute('aria-pressed',String(!!on));$('sound-toggle').textContent=on?'♫ Som ligado':'♪ Ativar som';});
+$('chat-history-toggle').addEventListener('click',()=>{const el=$('chat-messages');el.hidden=!el.hidden;$('chat-history-toggle').setAttribute('aria-expanded',String(!el.hidden));});
 $('interaction').addEventListener('click', () => scene?.interact());
 for (const mode of ['follow','room']) $('camera-' + mode).addEventListener('click', () => scene?.setCameraMode(mode));
 $('motion-toggle').addEventListener('click', () => { const paused = $('motion-toggle').getAttribute('aria-pressed') !== 'true'; $('motion-toggle').setAttribute('aria-pressed',String(paused)); $('motion-toggle').textContent = paused ? 'Retomar animações' : 'Pausar animações'; scene?.setPaused(paused); });
@@ -173,7 +177,7 @@ try {
     onCamera:mode => { for (const id of ['follow','room']) $('camera-' + id).setAttribute('aria-pressed',String(id === mode)); $('scene').dataset.camera = mode; },
     onLocation:id => { $('rag-action').hidden=id!=='rag';$('location-name').textContent = name(id); if (id && id !== sector) { sector = id; renderRoster(); } },
     onCandidate:robot => { $('interaction').hidden = !robot || !!selectedRobot; $('interaction').dataset.robot = robot?.id || ''; $('interaction-name').textContent = robot ? `${name(robot.sector)} / ${robot.name}` : ''; },
-    onPosition:(x,z) => { $('scene').dataset.x = x.toFixed(3); $('scene').dataset.z = z.toFixed(3); },
+    onPosition:(x,z) => { $('campus-welcome').hidden=z<34||!!selectedRobot;  $('scene').dataset.x = x.toFixed(3); $('scene').dataset.z = z.toFixed(3); },
     onLostContext:lost => { $('scene-fallback').hidden = !lost; if (lost) closeChat(); },
   });
   if (state) scene.update(state);

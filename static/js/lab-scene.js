@@ -1,4 +1,7 @@
 import * as T from '../vendor/three.module.min.js';
+import {createCampus,createParcelFlow,ZONES,slotsFor} from './lab-campus.js';
+import {createLabAudio} from './lab-audio.js';
+import {createDialogue} from './lab-dialogue.js';
 import {createInstallations} from './lab-installations.js';
 import {createRagDome} from './lab-rag.js';
 import {batchStatic} from './lab-batch.js';
@@ -7,14 +10,8 @@ import {createRigFactory, poseRig, dampAngle} from './lab-rigs.js';
 import {canStand, findPath, nearestFree, moveWithCollision} from './lab-navigation.js';
 
 // Local assets only: the supplied Sato GLB and procedural lab/robots.
-const ZONES = {
-  hermes: {x: 0, z: 0, color: '#56d5c3'}, models: {x: -10, z: -6, color: '#e9ab61'},
-  mcp: {x: 0, z: -7.5, color: '#6ccce0'}, rag: {x: 10, z: -6, color: '#83cbb3'},
-  memory: {x: -11, z: 4.5, color: '#bab5e4'}, cron: {x: 10, z: 4.5, color: '#e3b271'},
-  vm: {x: 0, z: 8, color: '#80b4c6'},
-};
 const LIVE = new Set(['recent', 'running', 'process']);
-const NAMES = {hermes:'NÚCLEO',models:'PROVIDERS',mcp:'MCP',rag:'RAG',memory:'SKILLS',cron:'CRON',vm:'VM'};
+const NAMES = {gateway:'GATEWAYS',hermes:'NÚCLEO',models:'PROVIDERS',mcp:'MCP',rag:'RAG',memory:'SKILLS',cron:'CRON',vm:'VM'};
 
 export async function createLabScene(container, callbacks) {
   const hero = await loadSatoAvatar();
@@ -25,11 +22,12 @@ export async function createLabScene(container, callbacks) {
   renderer.shadowMap.autoUpdate = true;
   renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
   container.append(renderer.domElement);
-  const world = new T.Scene(); world.background = new T.Color('#c4d2cc');
-  world.fog = new T.Fog('#c4d2cc', 100, 160);
-  const camera = new T.PerspectiveCamera(42, 1, .1, 160);
-  const aim = new T.Vector3(-4, 1, 4), target = aim.clone();
-  let azimuth = .55, elevation = .64, radius = 14, targetRadius = 14, paused = false, stale = false;
+  const audio=createLabAudio(),dialogue=createDialogue(container);
+  const world = new T.Scene(); world.background = new T.Color('#c5dde4');
+  world.fog = new T.Fog('#c5dde4', 100, 160);
+  const camera = new T.PerspectiveCamera(42, 1, .1, 240);
+  const aim = new T.Vector3(0, 10, 36), target = aim.clone();
+  let azimuth = .32, elevation = .38, radius = 76, targetRadius = 76, paused = false, stale = false;
   let latestData = null, lastTime = 0, animationTime = 0, lastPosition = 0;
   let dirty = true;
   const keys = new Set(), robots = new Map(), zones = new Map(), hitObjects = [], obstacles = [];
@@ -78,51 +76,13 @@ export async function createLabScene(container, callbacks) {
     if (floor) plane.rotation.x = -Math.PI / 2; return plane;
   }
   world.add(new T.HemisphereLight('#e5f6ff', '#687772', 2.5));
-  const sunlight = new T.DirectionalLight('#fff0d8', 3.5); sunlight.position.set(-12, 25, 10); sunlight.castShadow = true;
-  sunlight.shadow.mapSize.set(1024, 1024); Object.assign(sunlight.shadow.camera, {left: -27, right: 27, top: 24, bottom: -24, far: 70});
+  const sunlight = new T.DirectionalLight('#fff0d8', 3.5); sunlight.position.set(-25, 65, 30); sunlight.castShadow = true;
+  sunlight.shadow.mapSize.set(1024, 1024); Object.assign(sunlight.shadow.camera, {left: -60, right: 60, top: 60, bottom: -60, far: 140});
   sunlight.shadow.normalBias = .045; sunlight.shadow.bias = -.0001; world.add(sunlight);
   const fill = new T.DirectionalLight('#a3e9f0', 1.4); fill.position.set(13, 9, -10); world.add(fill);
 
-  // Cutaway test chamber: tiled concrete, exposed mechanics, luminous seams.
-  box(world, 38, .7, 28, '#5f7978', 0, -.55, .3);
-  box(world, 37.4, .16, 27.4, '#80948d', 0, -.12, .3);
-  const tileGeo = new T.BoxGeometry(1.92, .12, 1.92);
-  const tiles = new T.InstancedMesh(tileGeo, mat('#b8c7bd'), 18 * 13);
-  const matrix = new T.Matrix4(); let index = 0;
-  for (let x = 0; x < 18; x++) for (let z = 0; z < 13; z++) {
-    matrix.makeTranslation(x * 2 - 17, -.01, z * 2 - 12); tiles.setMatrixAt(index, matrix);
-    tiles.setColorAt(index++, new T.Color().setHSL(.38, .07, .59 + ((x * 7 + z * 3) % 7) * .017));
-  }
-  tiles.receiveShadow = true; world.add(tiles);
-  // Back wall deliberately leaves the front open for a readable dollhouse view.
-  for (let x = -17; x <= 17; x += 2) {
-    box(world, 1.94, 8.6, .42, '#c5d1c7', x, 4.3, -13.2);
-    box(world, 1.94, .12, .45, '#91a9a1', x, 2.2, -13.17);
-    box(world, 1.5, .09, .12, glow('#c8f4e3'), x, 4.85, -12.9);
-  }
-  for (let z = -11; z <= 9; z += 2) {
-    box(world, .42, 3.2, 1.94, '#adbfb4', -18.1, 1.6, z);
-    box(world, .1, .09, 1.4, glow('#c8f4e3'), -17.84, 2.7, z);
-  }
-  box(world, 36.8, .28, .65, '#405b59', 0, 8.72, -13.2);
-  for (const y of [3.8, 4.18]) rod(world, [-17, y, -12.7], [17, y, -12.7], .1, mat('#667c77', .65));
-  for (const x of [-16, -7, 7, 16]) {
-    box(world, .18, 1.45, .26, '#536d67', x, 3.95, -12.63);
-    box(world, 1.3, .9, .15, '#294d4d', x, .9, -12.92);
-    for (let j = 0; j < 5; j++) box(world, 1.1, .035, .05, '#8ea89b', x, .57 + j * .15, -12.8);
-  }
-  textPlane(world, 'SATO  /  AGENT RESEARCH', 10, 1.5, -4.5, 3.05, -12.91, {color: '#345853', size: 45});
-  textPlane(world, '07  /  SYSTEMS', 4, .9, 11.2, 2.9, -12.9, {size: 48});
-  // Observation window.
-  box(world, 5, 2.2, .25, '#385b5b', 11.6, 4.1, -13);
-  box(world, 4.65, 1.86, .05, '#83b6b5', 11.6, 4.1, -12.83);
-  box(world, .12, 2, .1, '#3c6663', 11.6, 4.1, -12.77);
-  // Entry airlock, white shell with cyan edge.
-  ring(world, 1.5, .24, '#e3ece0', -13.5, 1.64, -12.78);
-  const door = cylinder(world, 1.27, .1, '#345753', -13.5, 1.64, -12.65); door.rotation.x = Math.PI / 2;
-  ring(world, 1.3, .055, glow('#8df6e0'), -13.5, 1.64, -12.51);
-  box(world, .07, 2.1, .1, '#789d8c', -13.5, 1.6, -12.5);
-  textPlane(world, '↓  ENTRADA', 2.3, .55, -13.5, 3.5, -12.8, {color: '#315854', size: 57});
+  const art={box,sphere,cylinder,ring,rod,mesh,mat,glow,geo,textPlane};
+  const campus=createCampus(world,art,obstacles);
   // Floor conduits link the sectors to the nucleus; these are architecture, not traces.
   for (const [id, zone] of Object.entries(ZONES)) {
     if (id === 'hermes') continue;
@@ -131,17 +91,6 @@ export async function createLabScene(container, callbacks) {
     rod(world, bend, [zone.x, .12, zone.z], .06, mat('#547e76'));
     for (let i = .2; i < 1; i += .18) sphere(world, .065, glow(zone.color), zone.x * i, .16, zone.z * i, [1, .35, 1]);
   }
-  // Small floor markings and test crates give the chamber a lived-in scale.
-  for (let i = 0; i < 8; i++) {
-    const stripe = box(world, .42, .025, 1.15, i % 2 ? '#acb3a1' : '#dcac5a', 13.6 + i * .36, .08, 9.8); stripe.rotation.y = -.35;
-  }
-  for (const [x, z] of [[15, -9], [-15, -2], [15, 8]]) {
-    box(world, 1.15, 1.15, 1.15, '#d7e1d6', x, .63, z);
-    box(world, .8, .8, 1.21, '#879b90', x, .63, z);
-    ring(world, .23, .05, '#d7e1d6', x, .63, z + .62);
-    obstacles.push({x, z, w: 1.6, d: 1.6});
-  }
-
   function makeScreen(parent, x, y, z, width = 1.44, height = .76) {
     const canvas = document.createElement('canvas'); canvas.width = 768; canvas.height = 384;
     const texture = new T.CanvasTexture(canvas); texture.colorSpace = T.SRGBColorSpace;
@@ -172,22 +121,24 @@ export async function createLabScene(container, callbacks) {
 
   for (const [id, zone] of Object.entries(ZONES)) {
     const group = new T.Group(); group.position.set(zone.x, .09, zone.z); world.add(group);
-    const r = id === 'hermes' ? 3.3 : 2.6;
+    const r = id === 'rag' ? 8.4 : id==='gateway'? 4.1 : 4.5;
     cylinder(group, r, .21, '#6c8b7e', 0, .08, 0);
     cylinder(group, r - .12, .12, '#cbd9ca', 0, .23, 0);
     const trim = ring(group, r - .22, .035, glow(zone.color), 0, .32, 0, true);
     ring(group, r - .07, .045, '#3a6157', 0, .27, 0, true);
-    const desk = new T.Group(); desk.position.z = -.75; group.add(desk); const display = consoleDesk(desk, zone.color);
-    obstacles.push({x: zone.x, z: zone.z - 1.15, w: 3.1, d: 1.8});
+    const desk = new T.Group(); desk.position.z = id==='rag'?6.2:-.75; group.add(desk); const display = consoleDesk(desk, zone.color);
+    obstacles.push({x: zone.x, z: zone.z + (id==='rag'?5.8:-1.15), w: 3.1, d: 1.8});
     zones.set(id, {group, trim, display, status:'unknown',radius:r});
-    // Physical double-sided plaque, with a steel post and an actual collider.
-    const sign = new T.Group(); group.add(sign); sign.position.set(1.95,0,2.12);
-    box(sign,.4,.13,.38,'#647e75',0,.36,0); box(sign,.075,1.1,.08,'#68867b',0,.9,0);
-    box(sign,2.65,.75,.13,'#294c4d',0,1.59,0);
-    const plaque = textPlane(sign,NAMES[id],2.52,.67,0,1.59,.071,{color:'#d7eee5',background:'#294c4d',size:142});
-    const rear = plaque.clone(); rear.position.z=-.071; rear.rotation.y=Math.PI; sign.add(rear);
+    // Suspended black digital halo; all faces remain pickable after batching.
+    const sign=new T.Group();group.add(sign);const y=id==='rag'?9:7;
+    ring(sign,r,.11,'#14252c',0,y+.58,0,true);
+    ring(sign,r,.025,glow(zone.color),0,y+.43,0,true);
+    for(let i=0;i<4;i++){
+      const angle=i*Math.PI/2,face=new T.Group();face.position.set(Math.sin(angle)*r,y,Math.cos(angle)*r);face.rotation.y=angle;sign.add(face);
+      box(face,3.7,.85,.12,'#111a22');
+      textPlane(face,NAMES[id],3.5,.7,0,0,.075,{color:'#ffffff',background:'#111a22',size:130});
+    }
     sign.traverse(o=>o.userData.station=id);
-    obstacles.push({x:zone.x+1.95,z:zone.z+2.12,w:.55,d:.5});
   }
   // Nucleus: segmented containment ring with articulated supports.
   const nucleus = new T.Group(); zones.get('hermes').group.add(nucleus);
@@ -232,12 +183,12 @@ export async function createLabScene(container, callbacks) {
   rod(scheduler, [0, 2.85, -1.45], [.52, 3.15, -1.45], .045, glow('#ebc786'));
   rod(scheduler, [0, 2.85, -1.44], [0, 3.44, -1.44], .03, '#e9e3c5');
   // Each extra worker has its own bench, terminal and tool to operate.
-  const slots = [[0,.25],[-2.85,.3],[2.85,.3],[0,3.15]];
+  const slots = slotsFor('hermes');
   const benches = new Map(), machineParts = [];
   for (const [id,zone] of Object.entries(ZONES)) {
-    for (let i=1;i<slots.length;i++) {
-      const [sx,sz] = slots[i], g = new T.Group();
-      g.position.set(zone.x+sx,groundAt(zone.x+sx,zone.z+sz)-.078,zone.z+sz-.66);g.scale.y=.8;world.add(g);
+    for (let i=1;i<slotsFor(id).length;i++) {
+      const [sx,sz] = slotsFor(id)[i], g = new T.Group();
+      g.position.set(zone.x+sx,groundAt(zone.x+sx,zone.z+sz)-.078,zone.z+sz-.66);g.scale.y=.8;if(id==='gateway'){g.scale.x=2;g.scale.z=1.5;}world.add(g);
       box(g,1.2,.14,.62,'#bccdc4',0,.86,0); box(g,.85,.75,.39,'#59756b',0,.42,-.07);
       box(g,.83,.5,.08,'#294d4b',0,1.22,-.2);
       const display = makeScreen(g,0,1.22,-.145,.75,.4); display.update(['BANCADA AUXILIAR','Aguardando agente','']);
@@ -246,30 +197,30 @@ export async function createLabScene(container, callbacks) {
       cylinder(tool,.08,.15,'#d7e3d6'); ring(tool,.08,.018,glow('#54b9f1'),0,.05,.07);
       tool.traverse(o => o.userData.dynamic=true); machineParts.push({object:tool,sector:id,slot:i,position:tool.getWorldPosition(new T.Vector3())});
       benches.set(`${id}:${i}`,{group:g,display});
-      obstacles.push({x:g.position.x,z:g.position.z,w:1.3,d:.72});
+      obstacles.push({x:g.position.x,z:g.position.z,w:id==='gateway'?2.6:1.3,d:id==='gateway'?1.1:.72});
     }
     const z = zones.get(id); z.trim.userData.dynamic = true;
     // Back equipment, not just the desktops, participates in collision.
-    obstacles.push({x:zone.x,z:zone.z-1.8,w:id==='hermes'?4.8:3.6,d:.8});
+    obstacles.push({x:zone.x,z:zone.z+(id==='rag'?5.3:-1.8),w:id==='hermes'?4.8:3.6,d:.8});
   }
-  for (const side of [-1,1]) obstacles.push({x:side*1.65,z:6.1,w:1.25,d:.5});
+  for (const side of [-1,1]) obstacles.push({x:side*1.65,z:9.1,w:1.25,d:.5});
   // Keep the plaques raycastable when batching the static chamber.
   world.traverse(o => { if (o.isMesh && o.userData.station) hitObjects.push(o); });
-  const art={box,sphere,cylinder,ring,rod,mesh,mat,glow,geo,textPlane};
-  const installations=createInstallations(world,zones,art),ragDome=createRagDome(world,art);
-  obstacles.push({x:10,z:-7.45,w:5.8,d:3.2});
+  const installations=createInstallations(world,zones,art),ragDome=createRagDome(world,art,ZONES.rag);
+  obstacles.push({x:ZONES.rag.x,z:ZONES.rag.z,w:10.5,d:10.5});
   batchStatic(world);
 
   const factory = createRigFactory({box,sphere,cylinder,ring,rod,mesh,mat,glow,geo});
-  const avatar = hero.root; avatar.position.set(-4,.13,4); avatar.scale.setScalar(1.12); world.add(avatar);
+  const parcels=createParcelFlow(world,art,ZONES,factory,obstacles);batchStatic(world);
+  const avatar = hero.root; avatar.position.set(0,.13,46); avatar.scale.setScalar(1.12);avatar.rotation.y=Math.PI; world.add(avatar);
   const destination = ring(world,.27,.023,glow('#c6f0f7'),0,.16,0,true); destination.visible=false;
-  let study=false,savedStudyCamera=null;
+  let study=false,savedStudyCamera=null,arrivalView=true;
   let cameraMode='follow', savedCamera=null, chatId=null, desiredRobot=null, route=[], location=null, candidate=null, emoteUntil=0;
   let targetAzimuth=azimuth, targetElevation=elevation, wasMoving=false, contextLost=false;
   const circles=[], zoneByRobot=new Map();
   const phaseFor=id => [...id].reduce((n,c) => (n*31+c.charCodeAt(0))%997,0)/71;
   const dist=(a,b) => Math.hypot(a.x-b.x,a.z-b.z);
-  function inside(id,p=avatar.position) { const z=ZONES[id]; return Math.hypot(p.x-z.x,p.z-z.z)<3.65; }
+  function inside(id,p=avatar.position) { const z=ZONES[id]; return Math.hypot(p.x-z.x,p.z-z.z)<(id==='rag'?10.5:id==='gateway'?15:5.6); }
   function groundAt(x,z) { for (const [id,data] of zones) if (Math.hypot(x-ZONES[id].x,z-ZONES[id].z)<data.radius-.12) return .38; return .13; }
   const emoticons=new Map();
   for (const text of ['…','?','!','✓','✦']) {
@@ -289,14 +240,15 @@ export async function createLabScene(container, callbacks) {
     for (const [id,zone] of Object.entries(ZONES)) {
       const workers=data.workers.filter(w=>w.sector===id), guide=workers.find(w=>w.kind==='guide');
       const priority=w=>w.kind==='guide'?0:w.id===chatId?1:w.id===desiredRobot?2:3;
-      const visible=workers.sort((a,b)=>priority(a)-priority(b)).slice(0,4);
+      const visible=workers.sort((a,b)=>priority(a)-priority(b)).slice(0,slotsFor(id).length);
+      const slots=slotsFor(id);
       const occupied=new Set();
       // Preserve each actor's workstation across snapshots, even when order changes.
       for (const w of visible) if (robots.has(w.id)) occupied.add(robots.get(w.id).slot);
       for (const w of visible) {
         keep.add(w.id); let item=robots.get(w.id);
         if (!item) {
-          const slot=w.kind==='guide'?0:[1,2,3].find(i=>!occupied.has(i));if(slot===undefined)continue;occupied.add(slot);
+          const slot=w.kind==='guide'?0:slots.map((_,i)=>i).slice(1).find(i=>!occupied.has(i));if(slot===undefined)continue;occupied.add(slot);
           const rig=factory.robot();rig.phase=phaseFor(w.id);rig.root.scale.setScalar(slot===0?1:.8);rig.root.position.set(zone.x+slots[slot][0],groundAt(zone.x+slots[slot][0],zone.z+slots[slot][1]),zone.z+slots[slot][1]);
           rig.root.traverse(o=>o.userData.robot=w.id);rig.bubble=bubble(rig.root,2.27);world.add(rig.root);
           item={rig,slot,worker:w};robots.set(w.id,item);renderer.shadowMap.needsUpdate=true;
@@ -305,7 +257,7 @@ export async function createLabScene(container, callbacks) {
         item.rig.indicator.material=glow(w.status==='error'?'#df9c6d':LIVE.has(w.status)?'#89d7b9':'#829c93');
         if(item.slot)benches.get(`${id}:${item.slot}`).display.update([w.name,w.status_label,w.detail||'']);
       }
-      for(let i=1;i<4;i++) if(!visible.some(w=>robots.get(w.id)?.slot===i))benches.get(`${id}:${i}`).display.update(['BANCADA AUXILIAR','Aguardando agente','']);
+      for(let i=1;i<slotsFor(id).length;i++) if(!visible.some(w=>robots.get(w.id)?.slot===i))benches.get(`${id}:${i}`).display.update(['BANCADA AUXILIAR','Aguardando agente','']);
       const z=zones.get(id);z.status=guide?.status||'unknown';z.trim.material=LIVE.has(z.status)?glow(zone.color):mat('#8ca89a');
       if(guide)z.display.update([NAMES[id]+' / '+guide.name,guide.status_label,...(guide.facts||[]).slice(0,2)]);
     }
@@ -316,7 +268,8 @@ export async function createLabScene(container, callbacks) {
     if(chatId&&!robots.has(chatId))endChat();
   }
   function stopWalking(){keys.clear();route=[];movementSpeed=0;destination.visible=false;dirty=true;}
-  function navigate(point){if(chatId||study)return false;const next=findPath(avatar.position,point,obstacles,circles);if(!next.length){callbacks.onToast('Não encontrei um caminho livre até esse ponto.');return false;}route=next;destination.position.set(next.at(-1).x,groundAt(next.at(-1).x,next.at(-1).z)+.025,next.at(-1).z);destination.visible=true;dirty=true;return true;}
+  function leaveArrival(){if(arrivalView){arrivalView=false;targetRadius=30;}}
+  function navigate(point){leaveArrival();audio.cue('click');if(chatId||study)return false;const next=findPath(avatar.position,point,obstacles,circles);if(!next.length){callbacks.onToast('Não encontrei um caminho livre até esse ponto.');return false;}route=next;destination.position.set(next.at(-1).x,groundAt(next.at(-1).x,next.at(-1).z)+.025,next.at(-1).z);destination.visible=true;dirty=true;return true;}
   function approach(item){
     const center=item.rig.root.position,options=[];
     for(let i=0;i<16;i++){const angle=i*Math.PI/8,p={x:center.x+Math.sin(angle)*1.5,z:center.z+Math.cos(angle)*1.5};if(inside(item.worker.sector,p)&&canStand(p.x,p.z,obstacles,circles))options.push(p);}
@@ -325,7 +278,7 @@ export async function createLabScene(container, callbacks) {
     return [];
   }
   function visitRobot(id){
-    if(chatId)return;desiredRobot=id;
+    if(chatId)return;leaveArrival();desiredRobot=id;
     if(!robots.has(id)&&latestData){const wasStale=stale;update(latestData);if(wasStale)setStale(true);}
     const item=robots.get(id);if(!item)return;
     route=approach(item);
@@ -339,19 +292,20 @@ export async function createLabScene(container, callbacks) {
     if(!canInteract(id)||chatId||study)return false;
     stopWalking();chatId=id;savedCamera={mode:cameraMode,azimuth:targetAzimuth,elevation:targetElevation,radius:targetRadius};
     nucleus.visible = false;renderer.shadowMap.needsUpdate=true;
-    const robot=robots.get(id).rig,dx=robot.root.position.x-avatar.position.x,dz=robot.root.position.z-avatar.position.z;
-    targetAzimuth=Math.atan2(-dz,dx)+.12;targetElevation=.73;targetRadius=18.5;
+    const robot=robots.get(id).rig;
+    savedCamera.aim=aim.clone();targetAzimuth=azimuth;targetElevation=elevation;targetRadius=radius;
+    dialogue.setOpen(true);audio.cue('chat');
     hero.greeting=animationTime+1.5;robot.greeting=animationTime+1.8;showBubble(hero,'✦');showBubble(robot,'…');emoteUntil=performance.now()+2500;
     callbacks.onCamera('chat');dirty=true;return true;
   }
   function endChat(){
-    chatId=null;hero.bubble.visible=false;for(const item of robots.values())item.rig.bubble.visible=false;
+    chatId=null;dialogue.setOpen(false);hero.bubble.visible=false;for(const item of robots.values())item.rig.bubble.visible=false;
     nucleus.visible=true;renderer.shadowMap.needsUpdate=true;previousCandidate=null;
     if(savedCamera){cameraMode=savedCamera.mode;targetAzimuth=savedCamera.azimuth;targetElevation=savedCamera.elevation;targetRadius=savedCamera.radius;savedCamera=null;}
     callbacks.onCamera(cameraMode);dirty=true;
   }
-  function emote(kind){if(!chatId)return;const rig=robots.get(chatId)?.rig;if(!rig)return;showBubble(hero,kind==='question'?'?':'…');showBubble(rig,kind==='question'?'…':kind==='error'?'!':'✓');emoteUntil=performance.now()+3000;dirty=true;}
-  function setCameraMode(mode){if(chatId||study)return;cameraMode=mode;targetRadius=mode==='room'?Math.max(44,43/camera.aspect):14;targetElevation=mode==='room'?.77:.64;targetAzimuth=.55;callbacks.onCamera(mode);dirty=true;}
+  function emote(kind){audio.cue(kind==='error'?'error':'answer');if(!chatId)return;const rig=robots.get(chatId)?.rig;if(!rig)return;showBubble(hero,kind==='question'?'?':'…');showBubble(rig,kind==='question'?'…':kind==='error'?'!':'✓');emoteUntil=performance.now()+3000;dirty=true;}
+  function setCameraMode(mode){if(chatId||study)return;cameraMode=mode;targetRadius=mode==='room'?Math.max(90,76/camera.aspect):(avatar.position.z>29?30:17);targetElevation=mode==='room'?.77:.64;targetAzimuth=.55;callbacks.onCamera(mode);dirty=true;}
   function setStale(value){stale=value;installations.setStale(value);dirty=true;if(value){for(const[id,z]of zones){z.trim.material=mat('#8ca89a');z.display.update([NAMES[id],'DADOS DESATUALIZADOS','Aguardando conexão']);}for(const item of robots.values())item.rig.indicator.material=glow('#829c93');}}
   // Rays reach actual robot meshes and actual physical signboards, not HTML labels.
   const raycaster=new T.Raycaster(),pointer=new T.Vector2(),floor=new T.Plane(new T.Vector3(0,1,0),-.15);let drag=null;
@@ -368,11 +322,11 @@ export async function createLabScene(container, callbacks) {
   });
   for(const type of ['pointercancel','lostpointercapture'])container.addEventListener(type,()=>drag=null);
   container.addEventListener('wheel',e=>{if(chatId)return;e.preventDefault();targetRadius=T.MathUtils.clamp(targetRadius+Math.sign(e.deltaY)*1.2,8,75);dirty=true;},{passive:false});
-  container.addEventListener('keydown',e=>{if(chatId||study)return;const key=e.key.length===1?e.key.toLowerCase():e.key;if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)){e.preventDefault();keys.add(key);route=[];}if(key==='e'){e.preventDefault();interact();}});
+  container.addEventListener('keydown',e=>{if(chatId||study)return;const key=e.key.length===1?e.key.toLowerCase():e.key;if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(key)){e.preventDefault();leaveArrival();keys.add(key);route=[];}if(key==='e'){e.preventDefault();interact();}});
   window.addEventListener('keyup',e=>keys.delete(e.key.length===1?e.key.toLowerCase():e.key));window.addEventListener('blur',stopWalking);container.addEventListener('blur',()=>keys.clear());
-  const resizeObserver=new ResizeObserver(()=>{const r=container.getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(study)targetRadius=camera.aspect>.85?13:20;else if(cameraMode==='room'&&!chatId)targetRadius=Math.max(44,43/camera.aspect);dirty=true;});resizeObserver.observe(container);
+  const resizeObserver=new ResizeObserver(()=>{const r=container.getBoundingClientRect();renderer.setSize(r.width,r.height,false);dialogue.resize(r.width,r.height);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(study)targetRadius=camera.aspect>.85?24:33;else if(cameraMode==='room'&&!chatId)targetRadius=Math.max(90,76/camera.aspect);dirty=true;});resizeObserver.observe(container);
   const direction=new T.Vector3(),travelDirection=new T.Vector3();
-  let movementSpeed=0,previousLocation='',previousCandidate='';
+  let movementSpeed=0,previousLocation='',previousCandidate='',wasInterior=false;
   function frame(ms){
     requestAnimationFrame(frame);if(ms-lastTime<1000/30)return;
     const elapsed=Math.min((ms-lastTime)/1000,.25),dt=elapsed;lastTime=ms;if(document.hidden||contextLost)return;
@@ -405,10 +359,10 @@ export async function createLabScene(container, callbacks) {
     if(desiredRobot&&canInteract(desiredRobot))candidate=robots.get(desiredRobot);
     if(location!==previousLocation){callbacks.onLocation(location);previousLocation=location;if(location){for(const item of robots.values())if(item.worker.sector===location){item.rig.greeting=animationTime+1.3;showBubble(item.rig,'✦');}emoteUntil=ms+1700;}}
     const candidateId=candidate?.worker.id||'';if(candidateId!==previousCandidate){callbacks.onCandidate(candidate?.worker||null);previousCandidate=candidateId;}
-    if(chatId){const other=robots.get(chatId)?.rig.root;if(other){target.copy(avatar.position).add(other.position).multiplyScalar(.5);target.y=8.4;avatar.rotation.y=dampAngle(avatar.rotation.y,Math.atan2(other.position.x-avatar.position.x,other.position.z-avatar.position.z),dt);}}
-    else if(study){target.set(10,2.5,-7.45);if(camera.aspect>.85){target.x-=Math.cos(azimuth)*1.8;target.z+=Math.sin(azimuth)*1.8;}else target.y=.4;}
-    else if(cameraMode==='follow'){target.copy(avatar.position);target.y+=1.1;}
-    else target.set(0,.65,0);
+    if(chatId){const other=robots.get(chatId)?.rig.root;if(other){target.copy(savedCamera.aim);target.y+=2.2;avatar.rotation.y=dampAngle(avatar.rotation.y,Math.atan2(other.position.x-avatar.position.x,other.position.z-avatar.position.z),dt);}}
+    else if(study){target.set(ZONES.rag.x,3.1,ZONES.rag.z);if(camera.aspect>.85){target.x-=Math.cos(azimuth)*1.8;target.z+=Math.sin(azimuth)*1.8;}else target.y=.4;}
+    else if(cameraMode==='follow'){target.copy(avatar.position);target.y+=arrivalView?10:1.1;if(arrivalView)target.z-=10;}
+    else target.set(0,1,0);
     const changing=aim.distanceToSquared(target)>.0001||Math.abs(radius-targetRadius)>.002||Math.abs(azimuth-targetAzimuth)>.002||Math.abs(elevation-targetElevation)>.002;
     aim.lerp(target,1-Math.exp(-elapsed*5));radius=T.MathUtils.lerp(radius,targetRadius,1-Math.exp(-elapsed*5));azimuth=dampAngle(azimuth,targetAzimuth,elapsed,6);elevation=T.MathUtils.lerp(elevation,targetElevation,1-Math.exp(-elapsed*5));
     camera.position.set(aim.x+Math.sin(azimuth)*Math.cos(elevation)*radius,aim.y+Math.sin(elevation)*radius,aim.z+Math.cos(azimuth)*Math.cos(elevation)*radius);camera.lookAt(aim);
@@ -424,18 +378,23 @@ export async function createLabScene(container, callbacks) {
       poseRig(rig,animationTime,dt,{speed:Math.min(.3,Math.abs(rig.root.rotation.y-beforeTurn)/dt*.2),attention,work:stale?.7:item.worker.status==='running'||item.worker.kind==='catalog'&&installations.memoryActive()?1:.8,talk:chatId===item.worker.id,lookYaw:T.MathUtils.clamp(Math.atan2(Math.sin(look-rig.root.rotation.y),Math.cos(look-rig.root.rotation.y)),-.3,.3),reduced:paused});
     }
     if(!paused)for(const part of machineParts){if(dist(avatar.position,part.position)<13)part.object.rotation.y=animationTime*.65+part.slot;}
+    const interior=campus.tick(dt,avatar.position);audio.tick(interior);
+    if((interior>.5)!==wasInterior&&!chatId&&!study){wasInterior=interior>.5;if(cameraMode==='follow'){targetRadius=wasInterior?17:30;targetElevation=wasInterior?.64:.48;}}
+    if(moving&&Math.floor(animationTime*3)!==Math.floor((animationTime-dt)*3))audio.cue('walk');
+    container.dataset.environment=interior>.5?'interior':'exterior';
     if(ms-lastPosition>150){callbacks.onPosition(avatar.position.x,avatar.position.z);lastPosition=ms;}
     // Shadow maps update on every rendered frame, including idle and turns.
-    installations.tick(animationTime,dt,paused);ragDome.tick(animationTime,camera);
-    renderer.render(world,camera);
+    installations.tick(animationTime,dt,paused);ragDome.tick(animationTime,camera);parcels.tick(animationTime);
+    for(const {rig} of parcels.couriers)poseRig(rig,animationTime,dt,{speed:.6,work:0,reduced:paused});
+    renderer.render(world,camera);dialogue.render(camera,avatar,robots.get(chatId)?.rig.root);
   }
   function setRagOpen(value){
-    if(value){if(chatId||!inside('rag'))return false;stopWalking();study=true;savedStudyCamera={mode:cameraMode,azimuth:targetAzimuth,elevation:targetElevation,radius:targetRadius};targetRadius=camera.aspect>.85?13:20;targetElevation=.54;targetAzimuth=.28;callbacks.onCamera('rag');}
+    if(value){if(chatId||!inside('rag'))return false;stopWalking();study=true;savedStudyCamera={mode:cameraMode,azimuth:targetAzimuth,elevation:targetElevation,radius:targetRadius};targetRadius=camera.aspect>.85?24:33;targetElevation=.54;targetAzimuth=.28;callbacks.onCamera('rag');}
     else if(study){study=false;previousCandidate=null;cameraMode=savedStudyCamera.mode;targetRadius=savedStudyCamera.radius;targetAzimuth=savedStudyCamera.azimuth;targetElevation=savedStudyCamera.elevation;savedStudyCamera=null;callbacks.onCamera(cameraMode);}
     dirty=true;return true;
   }
   callbacks.onCamera('follow');requestAnimationFrame(frame);
   renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();contextLost=true;stopWalking();callbacks.onLostContext(true);});
   renderer.domElement.addEventListener('webglcontextrestored',()=>{contextLost=false;dirty=true;renderer.shadowMap.needsUpdate=true;callbacks.onLostContext(false);});
-  return {setRagOpen,setRagGraph(payload,options){dirty=true;return ragDome.setGraph(payload,options);},selectRagNode(id){ragDome.select(id);dirty=true;},setRagBusy(value){ragDome.setBusy(value);dirty=true;},updateHeatmap(payload){installations.updateHeatmap(payload);dirty=true;},update,visitRobot,canInteract,interact,beginChat,endChat,emote,setCameraMode,setStale,stopWalking,setPaused(value){paused=value;dirty=true;}};
+  return {setChatMessages:dialogue.setMessages,toggleAudio:audio.toggle,setRagOpen,setRagGraph(payload,options){dirty=true;return ragDome.setGraph(payload,options);},selectRagNode(id){audio.cue('node');ragDome.select(id);dirty=true;},setRagBusy(value){ragDome.setBusy(value);dirty=true;},updateHeatmap(payload){installations.updateHeatmap(payload);dirty=true;},update,visitRobot,canInteract,interact,beginChat,endChat,emote,setCameraMode,setStale,stopWalking,setPaused(value){paused=value;dirty=true;}};
 }

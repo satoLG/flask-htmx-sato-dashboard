@@ -7,6 +7,7 @@
   <title>Laboratório · Sato Agents</title>
   <link rel="icon" href="{{ url_for('lab_asset', version=lab_asset_version, filename='favicon.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/lab.css') }}">
+  <link rel="stylesheet" href="{{ url_for('lab_asset', version=lab_asset_version, filename='css/lab-campus.css') }}">
 </head>
 <body>
 <main id="lab" aria-label="Laboratório interativo do Hermes">
@@ -17,9 +18,11 @@
     <div class="camera-switch glass" role="group" aria-label="Modo de câmera"><button type="button" id="camera-follow" aria-pressed="true">◎ <span>Seguir</span></button><button type="button" id="camera-room" aria-pressed="false">⤢ <span>Sala</span></button></div>
   </header>
   <div class="hud-bottom">
+    <button id="sound-toggle" class="sound-toggle glass" type="button" aria-pressed="false">♪ Ativar som</button>
     <button type="button" id="telemetry-toggle" class="telemetry-chip glass" aria-expanded="false" aria-controls="telemetry-panel"><span class="connection" id="connection" data-state="loading"><i></i><span>Conectando</span></span><span class="chip-divider"></span><span>CPU <b id="metric-cpu">—</b></span><span class="chip-memory">RAM <b id="metric-memory">—</b></span><span class="chip-arrow">↗</span></button>
     <button type="button" id="map-toggle" class="map-toggle glass" aria-expanded="false" aria-controls="map-panel">⌘ <span>Estações</span></button>
   </div>
+  <div id="campus-welcome" class="campus-welcome glass"><small>INSTALAÇÃO 01 / CAMPO ABERTO</small><h1>Sato Agents Lab</h1><p>Entre. Cada ideia tem um caminho.</p><button id="enter-lab" type="button">Entrar no laboratório ↗</button><span>Clique no chão · WASD para andar · arraste para olhar</span></div>
   <button type="button" id="interaction" class="interaction glass" hidden><span class="action-symbol">◉</span><span><small id="interaction-name"></small><strong>Conversar</strong></span><kbd>E</kbd></button>
   <button type="button" id="rag-action" class="rag-action glass" hidden>◎ Explorar rede RAG</button>
   <aside id="rag-panel" class="rag-panel overlay glass" aria-label="Explorador RAG em 3D" hidden>
@@ -47,11 +50,11 @@
     <div class="panel-heading"><div><small>DADOS DO HERMES</small><h2>Por dentro do lab</h2></div><button type="button" data-close="telemetry-panel" aria-label="Fechar telemetria">×</button></div>
     <div class="metrics"><div><small>Processos</small><strong id="metric-processes">—</strong></div><div><small>Eventos / 3 min</small><strong id="metric-events">—</strong></div></div>
     <p id="sync-note" class="sync-note">Aguardando primeira leitura</p><div id="events" class="event-list"></div>
-    <details class="source-notes"><summary id="source-summary">Fontes e disponibilidade</summary><ul id="warnings"></ul><p>Atividade a cada 5 s, catálogos a cada 30 s. Os gestos dos robôs são animações de ambientação; os estados e tarefas nos monitores vêm da telemetria. As conexões no piso representam a arquitetura.</p><p>Até quatro robôs por estação aparecem de cada vez. Escolha outro na lista para visitar sua bancada.</p></details>
+    <details class="source-notes"><summary id="source-summary">Fontes e disponibilidade</summary><ul id="warnings"></ul><p>Atividade a cada 5 s, catálogos a cada 30 s. Os gestos dos robôs são animações de ambientação; os estados e tarefas nos monitores vêm da telemetria. As conexões no piso representam a arquitetura.</p><p>Os pacotes e robôs entregadores ilustram o fluxo da arquitetura. Até quatro robôs por estação aparecem de cada vez; a recepção também mostra os gateways detectados. Escolha outro na lista para visitar sua bancada.</p></details>
   </aside>
   <section id="chat" class="robot-chat glass" role="dialog" aria-modal="true" aria-labelledby="chat-name" hidden>
-    <header class="chat-header"><span class="robot-icon">◉</span><div><small id="chat-sector">NÚCLEO</small><h2 id="chat-name">H-01</h2></div><span id="chat-status"></span><button type="button" id="chat-close" aria-label="Encerrar conversa">×</button></header>
-    <div class="chat-messages" id="chat-messages" role="log" aria-live="polite" aria-relevant="additions"></div>
+    <header class="chat-header"><span class="robot-icon">◉</span><div><small id="chat-sector">NÚCLEO</small><h2 id="chat-name">H-01</h2></div><span id="chat-status"></span><button id="chat-history-toggle" type="button" aria-expanded="false">Histórico</button><button type="button" id="chat-close" aria-label="Encerrar conversa">×</button></header>
+    <div class="chat-messages" id="chat-messages" hidden role="log" aria-live="polite" aria-relevant="additions"></div>
     <p id="chat-queue" class="chat-queue" role="status" hidden></p>
     <form id="chat-login" class="chat-login" hidden><label for="chat-password">Acesso privado ao Hermes</label><div><input id="chat-password" type="password" autocomplete="current-password" placeholder="Senha do chat" required><button type="submit">Entrar</button></div><small id="chat-login-note">As perguntas ficam na fila mesmo se você fechar a página.</small></form>
     <div class="chat-suggestions"><button type="button" data-question="O que você está fazendo agora?">O que está fazendo?</button><button type="button" data-question="O que você representa?">Qual é sua função?</button><button type="button" data-question="Quais dados você tem?">Ver dados</button><button type="button" data-question="Há alguma falha?">Ver falhas</button></div>

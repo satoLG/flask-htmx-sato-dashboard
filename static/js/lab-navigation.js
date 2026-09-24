@@ -1,5 +1,5 @@
 // Shared collision rules for walking and A*. Circles are the live robot roster.
-export const BOUNDS = {minX: -17.1, maxX: 17.1, minZ: -11.65, maxZ: 12.1};
+export const BOUNDS = {minX: -45, maxX: 45, minZ: -30, maxZ: 65};
 export const PLAYER_RADIUS = .32;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 export function canStand(x, z, boxes, circles, radius = PLAYER_RADIUS) {
@@ -39,7 +39,7 @@ export function findPath(start, desired, boxes, circles) {
   const origin = cell(start), open = new Heap(), best = new Map(), closed = new Set();
   const first = {...origin, p: start, g: 0, f: 0, parent: null}; open.push(first); best.set(key(origin.x, origin.z), 0);
   let end = null, iterations = 0;
-  while (open.items.length && iterations++ < 6000) {
+  while (open.items.length && iterations++ < 24000) {
     const n = open.pop(), nk = key(n.x, n.z);
     if (closed.has(nk)) continue;
     closed.add(nk);

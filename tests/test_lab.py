@@ -25,8 +25,8 @@ def test_lab_missing_sources_still_explorable(client):
     assert b"js/lab.js" in page.data
     state = client.get("/api/lab/state").get_json()
     assert state["telemetry_available"] is False
-    assert len(state["sectors"]) == 7
-    assert len([w for w in state["workers"] if w["kind"] == "guide"]) == 7
+    assert len(state["sectors"]) == 8
+    assert len([w for w in state["workers"] if w["kind"] == "guide"]) == 8
     assert not any(w["status"] in ("running", "recent", "process") for w in state["workers"])
     assert state["metrics"]["cpu"] is None
     assert state["warnings"]
@@ -41,7 +41,7 @@ def test_visual_instruments_expose_real_metrics_and_only_catalog_metadata(vm, cl
     (skill / "SKILL.md").write_text("private body is not telemetry")
     state = client.get("/api/lab/state").get_json()
     assert state["metrics"]["cpu"] == 0
-    assert state["metrics"]["memory"] == 72.5
+    assert state["metrics"]["memory"] == 82.5
     record = next(i for i in state["visuals"]["memory"]["items"] if i["name"] == "pesquisar")
     assert record["modified"] > 0
     assert set(record) == {"name", "category", "modified"}
@@ -114,7 +114,7 @@ def test_faulty_catalog_is_isolated(client, monkeypatch):
         raise RuntimeError("source unavailable")
     monkeypatch.setattr(lab.rag, "catalog", boom)
     state = client.get("/api/lab/state").get_json()
-    assert len(state["sectors"]) == 7
+    assert len(state["sectors"]) == 8
     assert any("source unavailable" in w for w in state["warnings"])
 
 
